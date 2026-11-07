@@ -260,6 +260,155 @@
     },
     {
       "manifest": {
+        "plugin_id": "community.filmography",
+        "version": "1.1.1",
+        "checksum": "__CHECKSUM__",
+        "silo_api_version": "v1",
+        "category": "Metadata",
+        "supported_platforms": [
+          {
+            "os": "linux",
+            "arch": "amd64"
+          },
+          {
+            "os": "linux",
+            "arch": "arm64"
+          }
+        ],
+        "capabilities": [
+          {
+            "type": "http_routes.v1",
+            "id": "pages",
+            "display_name": "Filmography page",
+            "description": "Searchable actor pages with every film and TV credit, photos and external links."
+          }
+        ],
+        "http_routes": [
+          {
+            "id": "page",
+            "method": "GET",
+            "path": "/filmography/",
+            "access": "authenticated",
+            "navigable": true,
+            "navigation_label": "Filmography",
+            "navigation_kind": "user"
+          },
+          {
+            "id": "api",
+            "method": "GET",
+            "path": "/api/*",
+            "access": "authenticated"
+          }
+        ],
+        "global_config_schema": [
+          {
+            "key": "tmdb",
+            "title": "TMDB",
+            "description": "Credits, photos and links come from The Movie Database.",
+            "required": true,
+            "json_schema": "{\"type\":\"object\",\"properties\":{\"api_key\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"}},\"additionalProperties\":false}",
+            "admin_form": {
+              "fields": [
+                {
+                  "key": "api_key",
+                  "label": "TMDB API key",
+                  "description": "The v3 API key or the v4 read access token from themoviedb.org \u2192 Settings \u2192 API.",
+                  "control": 3,
+                  "secret": true,
+                  "required": true
+                },
+                {
+                  "key": "language",
+                  "label": "Language",
+                  "description": "Language for biographies and titles.",
+                  "control": 1,
+                  "placeholder": "en-US"
+                }
+              ],
+              "submit_label": "Save TMDB settings"
+            }
+          },
+          {
+            "key": "silo",
+            "title": "Silo connection",
+            "description": "An API key from an admin account, used to mark the titles that are in your library.",
+            "required": true,
+            "json_schema": "{\"type\":\"object\",\"properties\":{\"api_key\":{\"type\":\"string\"},\"profile_id\":{\"type\":\"string\"},\"base_url\":{\"type\":\"string\"}},\"additionalProperties\":false}",
+            "admin_form": {
+              "fields": [
+                {
+                  "key": "api_key",
+                  "label": "Admin API key",
+                  "description": "Create one under Settings \u2192 API keys while signed in as an admin. Starts with sa_.",
+                  "control": 3,
+                  "secret": true,
+                  "required": true
+                },
+                {
+                  "key": "profile_id",
+                  "label": "Profile ID",
+                  "description": "Leave empty to use the key owner's primary profile. Use an unrestricted profile so nothing is hidden.",
+                  "control": 1
+                },
+                {
+                  "key": "base_url",
+                  "label": "Internal API URL override",
+                  "description": "Leave empty; the plugin asks Silo for its own listener.",
+                  "control": 1,
+                  "placeholder": "http://127.0.0.1:8080"
+                }
+              ],
+              "sections": [
+                {
+                  "key": "main",
+                  "title": "Connection",
+                  "field_keys": [
+                    "api_key"
+                  ]
+                },
+                {
+                  "key": "advanced",
+                  "title": "Advanced",
+                  "collapsible": true,
+                  "collapsed_default": true,
+                  "field_keys": [
+                    "profile_id",
+                    "base_url"
+                  ]
+                }
+              ],
+              "submit_label": "Save connection"
+            }
+          }
+        ],
+        "presentation": {
+          "display_name": "Filmography",
+          "summary": "Full actor filmographies for Silo, with every film and TV role, full-size photos and links to TMDB, IMDb and Wikipedia.",
+          "description_markdown": "Adds a **Filmography** page to the menu. Search for any actor or crew member to see:\n\n- Every film and TV credit from TMDB, filterable by movies, TV, acting and crew, and sortable by date, popularity, rating or title\n- Titles already in your library marked and linked straight to them in Silo\n- A full-size headshot and the complete photo gallery in a lightbox\n- Links to TMDB, IMDb, Wikipedia, Wikidata, Instagram, X, TikTok, Facebook, YouTube and their homepage",
+          "setup_markdown": "1. Paste a TMDB API key into **TMDB** (free from themoviedb.org \u2192 Settings \u2192 API).\n2. Paste an admin API key into **Silo connection**.\n3. Open **Filmography** in the menu.",
+          "publisher_name": "locky.uk",
+          "license_spdx": "MIT",
+          "homepage_url": "https://github.com/lockyuk/silo-plugins/tree/main/plugins/filmography",
+          "source_url": "https://github.com/lockyuk/silo-plugins",
+          "support_url": "https://github.com/lockyuk/silo-plugins/issues",
+          "changelog_url": "https://github.com/lockyuk/silo-plugins/releases",
+          "publisher_url": "https://github.com/lockyuk"
+        }
+      },
+      "repo_url": "https://github.com/lockyuk/silo-plugins",
+      "binaries": {
+        "linux/amd64": {
+          "url": "https://github.com/lockyuk/silo-plugins/releases/download/filmography-v1.1.1/filmography-1.1.1-linux-amd64",
+          "checksum": "048961856050ea13a7b4f058cfb934a3879a7f3add07297e030b5e15d311a03d"
+        },
+        "linux/arm64": {
+          "url": "https://github.com/lockyuk/silo-plugins/releases/download/filmography-v1.1.1/filmography-1.1.1-linux-arm64",
+          "checksum": "f58cf5f3bed9189d5fa60ce8b707bad214acf76884ba02501e8becaad31c8d94"
+        }
+      }
+    },
+    {
+      "manifest": {
         "plugin_id": "community.google-auth",
         "version": "0.3.2",
         "checksum": "__CHECKSUM__",
