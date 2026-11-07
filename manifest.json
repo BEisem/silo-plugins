@@ -3,7 +3,7 @@
     {
       "manifest": {
         "plugin_id": "beisem.filmography",
-        "version": "1.2.0",
+        "version": "1.2.1",
         "checksum": "__CHECKSUM__",
         "silo_api_version": "v1",
         "category": "Metadata",
@@ -106,12 +106,12 @@
       "repo_url": "https://github.com/BEisem/silo-plugins",
       "binaries": {
         "linux/amd64": {
-          "url": "https://github.com/BEisem/silo-plugins/releases/download/filmography-v1.2.0/filmography-1.2.0-linux-amd64",
-          "checksum": "6b5093e1f4203734559b73d8a4e6a8c3ae468c5e134ecfe2009f373d44eab44b"
+          "url": "https://github.com/BEisem/silo-plugins/releases/download/filmography-v1.2.1/filmography-1.2.1-linux-amd64",
+          "checksum": "6cf434073ef229e8ceb75d47e2aa17755e381be52d4f23ac7b9cc10cf6887440"
         },
         "linux/arm64": {
-          "url": "https://github.com/BEisem/silo-plugins/releases/download/filmography-v1.2.0/filmography-1.2.0-linux-arm64",
-          "checksum": "f472c3653c7983e5c8f050779984ef50291704ca3938d34ba756dcf4b72fae6e"
+          "url": "https://github.com/BEisem/silo-plugins/releases/download/filmography-v1.2.1/filmography-1.2.1-linux-arm64",
+          "checksum": "2d3d416c26d5cd66ba631e3a3d7fac96784e4191d7032f8df03b3cec8ac88ed9"
         }
       }
     }
