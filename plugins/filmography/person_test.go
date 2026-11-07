@@ -351,14 +351,14 @@ func TestRoutes(t *testing.T) {
 	}
 }
 
-type failingHost struct{ fakeHost }
+type failingHost struct{ *fakeHost }
 
 func (failingHost) ListLibraries(context.Context, string) ([]*pluginv1.Library, error) {
 	return nil, errors.New("rpc error: internal detail 10.0.0.5:5432")
 }
 
 func TestHostErrorsStayInTheLog(t *testing.T) {
-	a := testApp(t, failingHost{})
+	a := testApp(t, failingHost{&fakeHost{}})
 	p, err := a.person(context.Background(), "31", "7")
 	if err != nil {
 		t.Fatal(err)
