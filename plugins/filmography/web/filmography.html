@@ -58,7 +58,9 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
 .links a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; color: var(--text); font-size: 13.5px; }
 .links a:hover { border-color: var(--accent); text-decoration: none; }
 .stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; text-align: left; cursor: pointer; }
+.stat:hover, .stat:focus-visible { border-color: var(--accent); }
+.stat.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .stat b { font-size: 18px; display: block; }
 .stat span { color: var(--muted); font-size: 12px; }
 .stat.lib b { color: var(--lib); }
@@ -312,7 +314,7 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
     if (p.deathday) meta.push("<span><b>Died</b> " + esc(fmtDate(p.deathday)) + (p.birthday ? " (aged " + age(p.birthday, p.deathday) + ")" : "") + "</span>");
     const roles = p.credits.filter(c => !c.self);
     const libCount = p.credits.filter(c => c.content_id).length;
-    const stat = (n, label, cls) => '<div class="stat ' + (cls || "") + '"><b>' + n + "</b><span>" + label + "</span></div>";
+    const stat = (n, label, filter, cls) => '<button type="button" class="stat ' + (cls || "") + '" data-filter="' + filter + '" aria-pressed="false"><b>' + n + "</b><span>" + label + "</span></button>";
 
     main.innerHTML =
       '<section class="hero"><div class="bd" style="background-image:url(\'' + img(top.backdrop, "w1280") + '\')"></div><div class="in">' +
@@ -323,10 +325,10 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
           (p.biography ? '<div class="bio clamp" id="bio">' + esc(p.biography) + '</div><button class="more" id="more" hidden>Read more</button>' : '<div class="bio" style="color:var(--muted)">No biography on TMDB yet.</div>') +
           '<div class="links">' + p.links.map(l => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener"><span>' + (LINK_ICONS[l.kind] || "↗") + "</span>" + esc(l.label) + "</a>").join("") + "</div>" +
           '<div class="stats">' +
-            stat(roles.filter(c => c.media === "movie" && c.acting).length, "Film roles") +
-            stat(roles.filter(c => c.media === "tv" && c.acting).length, "TV roles") +
-            stat(p.credits.filter(c => c.crew).length, "Crew credits") +
-            stat(libCount, "In your library", "lib") +
+            stat(roles.filter(c => c.media === "movie" && c.acting).length, "Film roles", "film") +
+            stat(roles.filter(c => c.media === "tv" && c.acting).length, "TV roles", "tv") +
+            stat(p.credits.filter(c => c.crew).length, "Crew credits", "crew") +
+            stat(libCount, "In your library", "lib", "lib") +
           "</div>" +
         "</div></div></section>" +
       (p.library_error ? '<div class="warn">' + esc(p.library_error) + "</div>" : "") +
@@ -350,8 +352,45 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
       t.onclick = () => lightbox(gallery, i);
       strip.appendChild(t);
     });
+    main.querySelectorAll(".stat").forEach(b => b.onclick = () => applyStat(b.dataset.filter));
     renderControls();
     renderCredits();
+  }
+
+  // The stat boxes are shortcuts for the filters below them. Clicking the one
+  // that is already applied goes back to all titles and the usual roles.
+  const STAT_FILTERS = {
+    film: { media: "movie", role: "acting" },
+    tv: { media: "tv", role: "acting" },
+    crew: { media: "all", role: "crew" },
+  };
+  function statOn(key) {
+    if (key === "lib") return state.libOnly;
+    const f = STAT_FILTERS[key];
+    return !!f && state.media === f.media && state.role === f.role;
+  }
+  function applyStat(key) {
+    if (key === "lib") {
+      state.libOnly = !state.libOnly;
+    } else if (STAT_FILTERS[key]) {
+      const usual = person.department && person.department !== "Acting" ? "all" : "acting";
+      const f = statOn(key) ? { media: "all", role: usual } : STAT_FILTERS[key];
+      state.media = f.media;
+      state.role = prefs.role = f.role;
+      savePrefs();
+    } else {
+      return;
+    }
+    renderControls();
+    renderCredits();
+    document.getElementById("controls").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  function markStats() {
+    main.querySelectorAll(".stat").forEach(b => {
+      const on = statOn(b.dataset.filter);
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
   }
 
   function renderControls() {
@@ -423,6 +462,7 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
   }
 
   function renderCredits() {
+    markStats();
     const box = document.getElementById("credits");
     const list = filtered();
     const lib = list.filter(c => c.content_id).length;
