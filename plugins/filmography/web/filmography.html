@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filmography</title>
+<style>
+:root {
+  --bg: #0d0f13; --panel: #161a21; --panel2: #1e232c; --line: #2a303b;
+  --text: #e9edf3; --muted: #9aa3b2; --accent: #7aa7ff; --lib: #3ecf8e;
+  --radius: 12px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, select, input { font: inherit; color: inherit; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 0 20px 60px; }
+
+/* Search bar */
+.top { position: sticky; top: 0; z-index: 20; background: rgba(13,15,19,.92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 16px; padding-top: 12px; padding-bottom: 12px; }
+.brand { font-weight: 700; font-size: 18px; cursor: pointer; white-space: nowrap; }
+.search { flex: 1; position: relative; max-width: 560px; }
+.search input { width: 100%; padding: 10px 14px 10px 38px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; outline: none; }
+.search input:focus { border-color: var(--accent); }
+.search svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); opacity: .6; }
+
+/* People grid */
+h2 { font-size: 20px; margin: 28px 0 14px; }
+.people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px; }
+.pcard { background: var(--panel); border-radius: var(--radius); overflow: hidden; cursor: pointer; transition: transform .15s; border: 1px solid transparent; }
+.pcard:hover { transform: translateY(-3px); border-color: var(--line); }
+.pcard .ph { aspect-ratio: 2/3; background: var(--panel2) center/cover no-repeat; }
+.pcard .nm { padding: 8px 10px 2px; font-weight: 600; }
+.pcard .kf { padding: 0 10px 10px; color: var(--muted); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Person hero */
+.hero { position: relative; margin: 0 -20px; padding: 36px 20px 28px; overflow: hidden; }
+.hero .bd { position: absolute; inset: 0; background: center 25%/cover no-repeat; opacity: .22; filter: blur(2px); }
+.hero .bd::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(13,15,19,.3), var(--bg) 95%); }
+.hero .in { position: relative; display: flex; gap: 32px; align-items: flex-start; }
+.headshot { width: 260px; flex: none; aspect-ratio: 2/3; border-radius: var(--radius); background: var(--panel2) center/cover no-repeat; cursor: zoom-in; box-shadow: 0 12px 40px rgba(0,0,0,.5); position: relative; }
+.headshot .cnt { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.7); padding: 2px 9px; border-radius: 999px; font-size: 12px; }
+.info { flex: 1; min-width: 0; }
+.info h1 { margin: 0 0 6px; font-size: 38px; line-height: 1.1; }
+.meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 18px; margin-bottom: 12px; }
+.meta b { color: var(--text); font-weight: 600; }
+.aka { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.bio { white-space: pre-line; max-width: 900px; }
+.bio.clamp { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.more { background: none; border: 0; color: var(--accent); padding: 4px 0; cursor: pointer; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.links a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; color: var(--text); font-size: 13.5px; }
+.links a:hover { border-color: var(--accent); text-decoration: none; }
+.stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; }
+.stat b { font-size: 18px; display: block; }
+.stat span { color: var(--muted); font-size: 12px; }
+.stat.lib b { color: var(--lib); }
+
+/* Photo strip */
+.photos { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
+.photos img { height: 190px; border-radius: 8px; cursor: zoom-in; scroll-snap-align: start; background: var(--panel2); flex: none; }
+
+/* Controls */
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 4px 0 18px; position: sticky; top: 61px; z-index: 10; background: var(--bg); padding: 10px 0; }
+.seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.seg button { background: none; border: 0; padding: 5px 13px; border-radius: 999px; cursor: pointer; color: var(--muted); }
+.seg button.on { background: var(--panel2); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
+.controls select { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; }
+.chk { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; user-select: none; }
+.chk input { accent-color: var(--accent); }
+.count { color: var(--muted); margin-left: auto; font-size: 13px; }
+
+/* Credits grid */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px 16px; }
+.card { position: relative; display: block; color: var(--text); }
+.card:hover { text-decoration: none; }
+.card .po { position: relative; aspect-ratio: 2/3; border-radius: 10px; background: var(--panel2) center/cover no-repeat; overflow: hidden; transition: transform .15s, box-shadow .15s; }
+.card:hover .po { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(0,0,0,.45); }
+.card .po.none { display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px; color: var(--muted); font-size: 13px; }
+.card.inlib .po { box-shadow: 0 0 0 2px var(--lib); }
+.badge { position: absolute; left: 8px; top: 8px; background: var(--lib); color: #062615; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.mtype { position: absolute; right: 8px; top: 8px; background: rgba(0,0,0,.72); font-size: 11px; padding: 2px 7px; border-radius: 6px; }
+.zoom { position: absolute; right: 8px; bottom: 8px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(0,0,0,.7); cursor: zoom-in; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; }
+.card:hover .zoom, .zoom:focus { opacity: 1; }
+@media (hover: none) { .zoom { opacity: .85; } }
+.card .t { margin-top: 8px; font-weight: 600; line-height: 1.25; }
+.card .y { color: var(--muted); font-size: 13px; }
+.card .r { color: var(--muted); font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card .r i { color: var(--text); font-style: normal; }
+
+/* Credits timeline */
+.list { display: flex; flex-direction: column; }
+.yr { font-weight: 700; color: var(--muted); padding: 18px 0 6px; border-bottom: 1px solid var(--line); }
+.row { display: flex; gap: 14px; align-items: center; padding: 8px 6px; border-bottom: 1px solid var(--line); color: var(--text); border-radius: 8px; }
+.row:hover { background: var(--panel); text-decoration: none; }
+.row .th { width: 46px; height: 69px; flex: none; border-radius: 5px; background: var(--panel2) center/cover no-repeat; cursor: zoom-in; }
+.row .tx { flex: 1; min-width: 0; }
+.row .tx b { font-weight: 600; }
+.row .tx div { color: var(--muted); font-size: 13.5px; }
+.row .tx div i { color: var(--text); font-style: normal; }
+.row .il { color: var(--lib); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.row .vt { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+.note { color: var(--muted); padding: 40px 0; text-align: center; }
+.warn { background: #3a2a12; border: 1px solid #6b4b1a; color: #f3d9a4; padding: 10px 14px; border-radius: 10px; margin: 12px 0; font-size: 14px; }
+.spin { width: 34px; height: 34px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; margin: 60px auto; }
+@keyframes s { to { transform: rotate(360deg); } }
+
+/* Lightbox */
+.lbox { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.94); display: none; flex-direction: column; }
+.lbox.open { display: flex; }
+.lbox .stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 16px 70px; }
+.lbox .stage img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; box-shadow: 0 10px 60px rgba(0,0,0,.6); }
+.lbox .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 20px; color: var(--muted); font-size: 14px; }
+.lbox .bar a { color: var(--text); }
+.lbox .nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; border: 0; background: rgba(255,255,255,.1); cursor: pointer; font-size: 26px; color: #fff; }
+.lbox .nav:hover { background: rgba(255,255,255,.22); }
+.lbox .prev { left: 14px; } .lbox .next { right: 14px; }
+.lbox .close { position: absolute; top: 12px; right: 14px; width: 42px; height: 42px; border-radius: 50%; border: 0; background: rgba(255,255,255,.1); color: #fff; font-size: 22px; cursor: pointer; z-index: 2; }
+
+@media (max-width: 760px) {
+  .wrap { padding: 0 16px 40px; }
+  .top .wrap { gap: 10px; }
+  .brand { font-size: 16px; }
+  .hero { margin: 0 -16px; padding: 20px 16px; }
+  .hero .in { flex-direction: column; align-items: center; text-align: center; gap: 18px; }
+  .headshot { width: 200px; }
+  .info h1 { font-size: 28px; }
+  .meta, .links, .stats { justify-content: center; }
+  .controls { position: static; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 16px 12px; }
+  .people { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; }
+  .lbox .stage { padding: 10px; }
+  .lbox .nav { display: none; }
+  .count { margin-left: 0; width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap">
+  <div class="brand" id="home">Filmography</div>
+  <div class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="Search actors, directors, writers…" autocomplete="off">
+  </div>
+</div></div>
+
+<div class="wrap" id="main"></div>
+
+<div class="lbox" id="lb" role="dialog" aria-modal="true">
+  <button class="close" id="lbClose" aria-label="Close">✕</button>
+  <div class="stage" id="lbStage"><img id="lbImg" alt=""></div>
+  <button class="nav prev" id="lbPrev" aria-label="Previous">‹</button>
+  <button class="nav next" id="lbNext" aria-label="Next">›</button>
+  <div class="bar"><span id="lbCap"></span><span><span id="lbCount"></span> · <a id="lbOrig" target="_blank" rel="noopener">Open original</a></span></div>
+</div>
+
+<script>
+(() => {
+  const IMG = "https://image.tmdb.org/t/p/";
+  const API = "../api/";
+  const main = document.getElementById("main");
+  const qIn = document.getElementById("q");
+  const prefs = load("filmography.prefs") || {};
+  const state = { media: prefs.media || "all", role: prefs.role || "acting", sort: prefs.sort || "newest", view: prefs.view || "grid", libOnly: false, self: !!prefs.self };
+  let person = null;
+
+  function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
+  function savePrefs() { try { localStorage.setItem("filmography.prefs", JSON.stringify({ media: state.media, role: prefs.role, sort: state.sort, view: state.view, self: state.self })); } catch {} }
+  function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+  function img(path, size) { return path ? IMG + size + path : ""; }
+  function year(d) { return d ? d.slice(0, 4) : ""; }
+
+  async function api(path) {
+    const res = await fetch(API + path, { credentials: "same-origin" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || ("HTTP " + res.status));
+    return body;
+  }
+
+  function spinner() { main.innerHTML = '<div class="spin"></div>'; }
+  function showError(msg) { main.innerHTML = '<div class="warn">' + esc(msg) + "</div>"; }
+
+  // ---------- Routing ----------
+  let firstLoad = true;
+  function route() {
+    const p = new URLSearchParams(location.search);
+    if (p.get("person")) return openPerson(p.get("person"), false);
+    if (p.get("silo")) return openSilo(p.get("silo"));
+    // Opened from an actor page in Silo (first load only): show that person.
+    const ref = (document.referrer || "").match(/^https?:\/\/[^/]+\/person\/([^/?#]+)/);
+    if (ref && document.referrer.indexOf(location.origin) === 0 && firstLoad) {
+      firstLoad = false;
+      return openSilo(decodeURIComponent(ref[1]));
+    }
+    const q = p.get("q") || "";
+    qIn.value = q;
+    return runSearch(q, false);
+  }
+  function go(params) {
+    const u = new URL(location.href);
+    u.search = new URLSearchParams(params).toString();
+    history.pushState(null, "", u);
+  }
+  window.addEventListener("popstate", route);
+  document.getElementById("home").onclick = () => { qIn.value = ""; go({}); runSearch("", false); };
+
+  // ---------- Search ----------
+  let searchTimer, seqNo = 0;
+  qIn.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => handleInput(qIn.value.trim()), 300);
+  });
+  qIn.addEventListener("keydown", e => { if (e.key === "Enter") { clearTimeout(searchTimer); handleInput(qIn.value.trim()); } });
+
+  function handleInput(v) {
+    // A pasted TMDB person link, or a Silo person link or id.
+    let m = v.match(/themoviedb\.org\/person\/(\d+)/);
+    if (m) { qIn.value = ""; return openPerson(m[1], true); }
+    m = v.match(/(?:person|people)[\/=](\d{6,})/) || v.match(/^(\d{10,})$/);
+    if (m) { qIn.value = ""; go({ silo: m[1] }); return openSilo(m[1]); }
+    runSearch(v, true);
+  }
+
+  async function runSearch(q, push) {
+    if (push) go(q ? { q } : {});
+    person = null;
+    document.title = "Filmography";
+    const seq = ++seqNo;
+    spinner();
+    try {
+      const r = await api("search?q=" + encodeURIComponent(q));
+      if (seq !== seqNo) return;
+      if (!r.results.length) { main.innerHTML = '<div class="note">No one found for “' + esc(q) + "”.</div>"; return; }
+      main.innerHTML = "<h2>" + (r.popular ? "Popular people" : "Results for “" + esc(q) + "”") + '</h2><div class="people"></div>';
+      const grid = main.querySelector(".people");
+      for (const p of r.results) {
+        const el = document.createElement("div");
+        el.className = "pcard";
+        el.tabIndex = 0;
+        el.innerHTML = '<div class="ph" style="background-image:url(\'' + img(p.photo, "w342") + '\')"></div><div class="nm">' + esc(p.name) + '</div><div class="kf">' + esc([p.department, ...(p.known_for || [])].filter(Boolean).join(" · ")) + "</div>";
+        if (!p.photo) el.querySelector(".ph").innerHTML = silhouette();
+        el.onclick = () => openPerson(p.id, true);
+        el.onkeydown = e => { if (e.key === "Enter") openPerson(p.id, true); };
+        grid.appendChild(el);
+      }
+    } catch (e) { if (seq === seqNo) showError(e.message); }
+  }
+
+  function silhouette() {
+    return '<svg viewBox="0 0 100 150" width="100%" height="100%"><circle cx="50" cy="55" r="20" fill="#2f3643"/><path d="M14 130c3-28 18-42 36-42s33 14 36 42z" fill="#2f3643"/></svg>';
+  }
+
+  async function openSilo(id) {
+    const seq = ++seqNo;
+    spinner();
+    try {
+      const r = await api("silo-person/" + id);
+      if (seq !== seqNo) return;
+      history.replaceState(null, "", "?person=" + encodeURIComponent(r.tmdb_id));
+      openPerson(r.tmdb_id, false);
+    } catch (e) { if (seq === seqNo) showError(e.message); }
+  }
+
+  // ---------- Person ----------
+  async function openPerson(id, push) {
+    if (push) go({ person: id });
+    const seq = ++seqNo;
+    spinner();
+    window.scrollTo(0, 0);
+    try {
+      const p = await api("person/" + encodeURIComponent(id));
+      if (seq !== seqNo) return;
+      person = p;
+      state.libOnly = false;
+      // Without a saved choice, directors and writers start on everything.
+      if (!prefs.role) state.role = p.department && p.department !== "Acting" ? "all" : "acting";
+      document.title = p.name + " · Filmography";
+      renderPerson();
+    } catch (e) { if (seq === seqNo) showError(e.message); }
+  }
+
+  function age(born, died) {
+    const b = new Date(born), d = died ? new Date(died) : new Date();
+    let a = d.getFullYear() - b.getFullYear();
+    if (d.getMonth() < b.getMonth() || (d.getMonth() === b.getMonth() && d.getDate() < b.getDate())) a--;
+    return a;
+  }
+  function fmtDate(s) {
+    const d = new Date(s + "T00:00:00");
+    return isNaN(d) ? s : d.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+  }
+
+  const LINK_ICONS = { tmdb: "🎬", imdb: "⭐", wikipedia: "📖", wikidata: "🗂", instagram: "📷", x: "𝕏", tiktok: "♪", facebook: "ⓕ", youtube: "▶", homepage: "🌐" };
+
+  function renderPerson() {
+    const p = person;
+    const top = p.credits.filter(c => c.backdrop && c.acting && !c.self).sort((a, b) => b.popularity - a.popularity)[0] || p.credits.find(c => c.backdrop) || {};
+    const meta = [];
+    if (p.department) meta.push("<span><b>Known for</b> " + esc(p.department) + "</span>");
+    if (p.birthday) meta.push("<span><b>Born</b> " + esc(fmtDate(p.birthday)) + (p.deathday ? "" : " (age " + age(p.birthday) + ")") + (p.birthplace ? " · " + esc(p.birthplace) : "") + "</span>");
+    if (p.deathday) meta.push("<span><b>Died</b> " + esc(fmtDate(p.deathday)) + (p.birthday ? " (aged " + age(p.birthday, p.deathday) + ")" : "") + "</span>");
+    const roles = p.credits.filter(c => !c.self);
+    const libCount = p.credits.filter(c => c.content_id).length;
+    const stat = (n, label, cls) => '<div class="stat ' + (cls || "") + '"><b>' + n + "</b><span>" + label + "</span></div>";
+
+    main.innerHTML =
+      '<section class="hero"><div class="bd" style="background-image:url(\'' + img(top.backdrop, "w1280") + '\')"></div><div class="in">' +
+        '<div class="headshot" id="headshot" style="background-image:url(\'' + img(p.photo, "h632") + '\')">' + (p.photo ? "" : silhouette()) + (p.images.length > 1 ? '<span class="cnt">' + p.images.length + " photos</span>" : "") + "</div>" +
+        '<div class="info"><h1>' + esc(p.name) + "</h1>" +
+          '<div class="meta">' + meta.join("") + "</div>" +
+          (p.also_known_as && p.also_known_as.length ? '<div class="aka">Also known as ' + esc(p.also_known_as.slice(0, 6).join(" · ")) + "</div>" : "") +
+          (p.biography ? '<div class="bio clamp" id="bio">' + esc(p.biography) + '</div><button class="more" id="more" hidden>Read more</button>' : '<div class="bio" style="color:var(--muted)">No biography on TMDB yet.</div>') +
+          '<div class="links">' + p.links.map(l => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener"><span>' + (LINK_ICONS[l.kind] || "↗") + "</span>" + esc(l.label) + "</a>").join("") + "</div>" +
+          '<div class="stats">' +
+            stat(roles.filter(c => c.media === "movie" && c.acting).length, "Film roles") +
+            stat(roles.filter(c => c.media === "tv" && c.acting).length, "TV roles") +
+            stat(p.credits.filter(c => c.crew).length, "Crew credits") +
+            stat(libCount, "In your library", "lib") +
+          "</div>" +
+        "</div></div></section>" +
+      (p.library_error ? '<div class="warn">' + esc(p.library_error) + "</div>" : "") +
+      (p.images.length > 1 ? '<h2>Photos</h2><div class="photos" id="photos"></div>' : "") +
+      '<h2>Filmography</h2><div class="controls" id="controls"></div><div id="credits"></div>';
+
+    const bio = document.getElementById("bio");
+    if (bio) {
+      const more = document.getElementById("more");
+      requestAnimationFrame(() => { if (bio.scrollHeight > bio.clientHeight + 4) more.hidden = false; });
+      more.onclick = () => { const c = bio.classList.toggle("clamp"); more.textContent = c ? "Read more" : "Show less"; };
+    }
+    const gallery = p.images.map(im => ({ src: img(im.path, "original"), cap: p.name + " · " + im.w + "×" + im.h }));
+    if (!gallery.length && p.photo) gallery.push({ src: img(p.photo, "original"), cap: p.name });
+    if (gallery.length) document.getElementById("headshot").onclick = () => lightbox(gallery, 0);
+    const strip = document.getElementById("photos");
+    if (strip) p.images.forEach((im, i) => {
+      const t = document.createElement("img");
+      t.loading = "lazy"; t.src = img(im.path, "w185"); t.alt = p.name;
+      t.width = Math.round(190 * im.w / im.h); t.height = 190;
+      t.onclick = () => lightbox(gallery, i);
+      strip.appendChild(t);
+    });
+    renderControls();
+    renderCredits();
+  }
+
+  function renderControls() {
+    const c = document.getElementById("controls");
+    const seg = (key, opts) => '<div class="seg" data-key="' + key + '">' + opts.map(([v, l]) => '<button data-v="' + v + '" class="' + (state[key] === v ? "on" : "") + '">' + l + "</button>").join("") + "</div>";
+    const sorts = [["newest", "Newest first"], ["oldest", "Oldest first"], ["popular", "Most popular"], ["rating", "Highest rated"], ["billing", "Biggest roles"], ["title", "Title A–Z"]];
+    c.innerHTML =
+      seg("media", [["all", "All"], ["movie", "Movies"], ["tv", "TV"]]) +
+      seg("role", [["acting", "Acting"], ["crew", "Crew"], ["all", "Everything"]]) +
+      '<select id="sort" aria-label="Sort">' + sorts.map(([v, l]) => '<option value="' + v + '"' + (state.sort === v ? " selected" : "") + ">" + l + "</option>").join("") + "</select>" +
+      seg("view", [["grid", "Posters"], ["list", "Timeline"]]) +
+      '<label class="chk"><input type="checkbox" id="libOnly"' + (state.libOnly ? " checked" : "") + "> In my library</label>" +
+      '<label class="chk" title="Talk shows, news, award shows and documentaries where they appear as themselves"><input type="checkbox" id="self"' + (state.self ? " checked" : "") + "> Include appearances as self</label>" +
+      '<span class="count" id="count"></span>';
+    c.querySelectorAll(".seg").forEach(s => s.onclick = e => {
+      const b = e.target.closest("button"); if (!b) return;
+      state[s.dataset.key] = b.dataset.v;
+      if (s.dataset.key === "role") prefs.role = b.dataset.v;
+      s.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+      savePrefs(); renderCredits();
+    });
+    document.getElementById("sort").onchange = e => { state.sort = e.target.value; savePrefs(); renderCredits(); };
+    document.getElementById("libOnly").onchange = e => { state.libOnly = e.target.checked; renderCredits(); };
+    document.getElementById("self").onchange = e => { state.self = e.target.checked; savePrefs(); renderCredits(); };
+  }
+
+  function filtered() {
+    const list = person.credits.filter(c =>
+      (state.media === "all" || c.media === state.media) &&
+      (state.role === "all" || (state.role === "acting" ? c.acting : c.crew)) &&
+      (!state.libOnly || c.content_id) &&
+      (state.self || !c.self || (state.role !== "acting" && c.crew)));
+    const by = {
+      newest: (a, b) => (b.date || "9999").localeCompare(a.date || "9999"),
+      oldest: (a, b) => (a.date || "9999").localeCompare(b.date || "9999"),
+      popular: (a, b) => b.popularity - a.popularity,
+      rating: (a, b) => (b.votes >= 20 ? b.vote : 0) - (a.votes >= 20 ? a.vote : 0) || b.votes - a.votes,
+      billing: (a, b) => a.billing - b.billing || b.popularity - a.popularity,
+      title: (a, b) => a.title.localeCompare(b.title),
+    }[state.sort];
+    return list.sort(by);
+  }
+
+  function roleText(c) {
+    const shown = c.roles.filter(r => state.role === "all" || (state.role === "crew") === !!r.crew);
+    return shown.map(r => {
+      const ep = r.episodes ? " (" + r.episodes + " ep" + (r.episodes === 1 ? "" : "s") + ")" : "";
+      if (r.crew) return esc(r.text) + ep;
+      return r.text ? "as <i>" + esc(r.text) + "</i>" + ep : ep.trim();
+    }).filter(Boolean).join(" · ");
+  }
+
+  // Library titles open in Silo; the rest open on TMDB.
+  function hrefOf(c) {
+    return c.content_id
+      ? { href: "/item/" + encodeURIComponent(c.content_id), target: "_top" }
+      : { href: "https://www.themoviedb.org/" + c.media + "/" + c.id, target: "_blank" };
+  }
+
+  function renderCredits() {
+    const box = document.getElementById("credits");
+    const list = filtered();
+    const lib = list.filter(c => c.content_id).length;
+    document.getElementById("count").textContent = list.length + " title" + (list.length === 1 ? "" : "s") + (lib ? " · " + lib + " in your library" : "");
+    if (!list.length) { box.innerHTML = '<div class="note">Nothing matches these filters.</div>'; return; }
+    const withPoster = list.filter(c => c.poster).map(c => ({ src: img(c.poster, "original"), cap: c.title + (c.date ? " (" + year(c.date) + ")" : "") }));
+    const zoom = i => { const s = img(list[i].poster, "original"); if (s) lightbox(withPoster, withPoster.findIndex(p => p.src === s)); };
+    const dated = state.sort === "newest" || state.sort === "oldest";
+
+    if (state.view === "list") {
+      let html = '<div class="list">', last = null;
+      list.forEach((c, i) => {
+        const y = year(c.date) || "Upcoming / undated";
+        if (dated && y !== last) { html += '<div class="yr">' + esc(y) + "</div>"; last = y; }
+        const h = hrefOf(c);
+        html += '<a class="row" href="' + esc(h.href) + '" target="' + h.target + '" rel="noopener">' +
+          '<div class="th" data-i="' + i + '" style="background-image:url(\'' + img(c.poster, "w154") + '\')"></div>' +
+          '<div class="tx"><b>' + esc(c.title) + '</b> <span style="color:var(--muted)">' + (c.media === "tv" ? "· TV " : "") + (!dated && c.date ? "· " + year(c.date) : "") + "</span><div>" + roleText(c) + "</div></div>" +
+          (c.content_id ? '<span class="il">▶ In library</span>' : "") +
+          (c.votes >= 20 ? '<span class="vt">★ ' + c.vote.toFixed(1) + "</span>" : "") + "</a>";
+      });
+      box.innerHTML = html + "</div>";
+      box.querySelectorAll(".th").forEach(t => t.onclick = e => { e.preventDefault(); e.stopPropagation(); zoom(+t.dataset.i); });
+      return;
+    }
+
+    box.innerHTML = '<div class="grid">' + list.map((c, i) => {
+      const h = hrefOf(c);
+      return '<a class="card' + (c.content_id ? " inlib" : "") + '" href="' + esc(h.href) + '" target="' + h.target + '" rel="noopener" title="' + esc(c.overview || c.title) + '">' +
+        (c.poster ? '<div class="po" style="background-image:url(\'' + img(c.poster, "w342") + '\')">' : '<div class="po none">' + esc(c.title)) +
+          (c.content_id ? '<span class="badge">In library</span>' : "") +
+          (c.media === "tv" ? '<span class="mtype">TV</span>' : "") +
+          (c.poster ? '<button class="zoom" data-i="' + i + '" aria-label="View full poster"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>' : "") +
+        "</div>" +
+        '<div class="t">' + esc(c.title) + '</div><div class="y">' + esc(year(c.date) || "TBA") + (c.votes >= 20 ? " · ★ " + c.vote.toFixed(1) : "") + "</div>" +
+        '<div class="r">' + roleText(c) + "</div></a>";
+    }).join("") + "</div>";
+    box.querySelectorAll(".zoom").forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); zoom(+b.dataset.i); });
+  }
+
+  // ---------- Lightbox ----------
+  const lb = document.getElementById("lb"), lbImg = document.getElementById("lbImg");
+  let lbItems = [], lbAt = 0;
+  function lightbox(items, i) {
+    if (!items.length) return;
+    lbItems = items; lbAt = Math.max(0, i);
+    lb.classList.add("open");
+    document.body.style.overflow = "hidden";
+    showLb();
+  }
+  function showLb() {
+    const it = lbItems[lbAt];
+    lbImg.src = it.src; lbImg.alt = it.cap;
+    document.getElementById("lbCap").textContent = it.cap;
+    document.getElementById("lbCount").textContent = (lbAt + 1) + " / " + lbItems.length;
+    document.getElementById("lbOrig").href = it.src;
+    const multi = lbItems.length > 1;
+    document.getElementById("lbPrev").style.visibility = document.getElementById("lbNext").style.visibility = multi ? "visible" : "hidden";
+    // Warm the neighbours so paging is instant.
+    if (multi) [1, -1].forEach(d => { new Image().src = lbItems[(lbAt + d + lbItems.length) % lbItems.length].src; });
+  }
+  function step(d) { lbAt = (lbAt + d + lbItems.length) % lbItems.length; showLb(); }
+  function closeLb() { lb.classList.remove("open"); document.body.style.overflow = ""; lbImg.removeAttribute("src"); }
+  document.getElementById("lbPrev").onclick = () => step(-1);
+  document.getElementById("lbNext").onclick = () => step(1);
+  document.getElementById("lbClose").onclick = closeLb;
+  document.getElementById("lbStage").onclick = e => { if (e.target !== lbImg) closeLb(); };
+  document.addEventListener("keydown", e => {
+    if (!lb.classList.contains("open")) return;
+    if (e.key === "Escape") closeLb();
+    else if (e.key === "ArrowLeft") step(-1);
+    else if (e.key === "ArrowRight") step(1);
+  });
+  let touchX = null;
+  lb.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, { passive: true });
+  lb.addEventListener("touchend", e => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+    if (Math.abs(dx) > 50 && lbItems.length > 1) step(dx < 0 ? 1 : -1);
+  });
+
+  route();
+})();
+</script>
+</body>
+</html>

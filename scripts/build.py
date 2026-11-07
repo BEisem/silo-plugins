@@ -40,6 +40,13 @@ def sh(*args, cwd=None, env=None):
 def main():
     release = "--release" in sys.argv
     DIST.mkdir(exist_ok=True)
+    # Releases that already exist are never rebuilt: Go stamps the git revision
+    # into a binary, so a rebuild would no longer match the published checksum.
+    # Their index entries are carried over unchanged.
+    old = {}
+    if (ROOT / "manifest.json").exists():
+        for e in json.loads((ROOT / "manifest.json").read_text()).get("plugins", []):
+            old[(e["manifest"]["plugin_id"], e["manifest"]["version"])] = e
     entries = []
     for pdir in sorted((ROOT / "plugins").iterdir()):
         mpath = pdir / "manifest.json"
@@ -48,11 +55,15 @@ def main():
         manifest = json.loads(mpath.read_text())
         pid, version = manifest["plugin_id"], manifest["version"]
         tag = f"{pdir.name}-v{version}"
+        if (pid, version) in old:
+            print(f"{tag}: already released, keeping its index entry")
+            entries.append(old[(pid, version)])
+            continue
         binaries, assets = {}, []
         for arch in ARCHES:
             out = DIST / f"{pdir.name}-{version}-linux-{arch}"
             env = dict(os.environ, CGO_ENABLED="0", GOOS="linux", GOARCH=arch)
-            sh("go", "build", "-trimpath", "-ldflags", f"-s -w -X main.version={version}",
+            sh("go", "build", "-trimpath", "-buildvcs=false", "-ldflags", f"-s -w -X main.version={version}",
                "-o", str(out), ".", cwd=pdir, env=env)
             digest = hashlib.sha256(out.read_bytes()).hexdigest()
             binaries[f"linux/{arch}"] = {
