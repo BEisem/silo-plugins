@@ -1,10 +1,14 @@
 # silo-plugins
 
-A plugin repository for [Silo](https://github.com/Silo-Server). Add this URL in
-**Admin → Plugins → Repositories**:
+BEisem's fork of [lockyuk/silo-plugins](https://github.com/lockyuk/silo-plugins).
+This fork publishes one plugin, `beisem.filmography`; see
+[plugins/filmography](plugins/filmography) for what changed. The other plugin
+folders are the upstream copies and aren't built or listed here.
+
+Add this URL in **Admin → Plugins → Repositories**:
 
 ```
-https://raw.githubusercontent.com/lockyuk/silo-plugins/main/manifest.json
+https://raw.githubusercontent.com/BEisem/silo-plugins/main/manifest.json
 ```
 
 | Plugin | What it does |
@@ -18,14 +22,10 @@ Binaries (linux/amd64 and linux/arm64) are attached to each release; the catalog
 
 ## Releasing
 
-1. Bump `version` in the plugin's `manifest.json` and `VERSION` in its `Makefile`.
-2. `make test` in the plugin directory.
-3. `scripts/build.py --release` builds both architectures, creates the GitHub
-   releases (`<plugin>-v<version>`), and rewrites `manifest.json`.
-4. Commit and push `manifest.json`.
-
-Release a version before pushing the index that lists it, or Silo will see a
-catalog entry with no download.
+Bump `version` in the plugin's `manifest.json` and `VERSION` in its `Makefile`,
+then merge to `main`. The Filmography workflow tests and builds both
+architectures, creates the GitHub release (`filmography-v<version>`), and
+commits the updated `manifest.json`.
 
 ## Trust
 

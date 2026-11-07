@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-"""Build every plugin for linux/amd64 and linux/arm64, then write manifest.json.
+"""Build this fork's plugins for linux/amd64 and linux/arm64, then write manifest.json.
 
     scripts/build.py            # builds into dist/ and rewrites manifest.json
     scripts/build.py --release  # also creates one GitHub release per plugin version
 
 Binaries are release assets, not committed. manifest.json is the catalog index
 Silo reads: add its raw URL under Admin > Plugins > Repositories.
-Needs Go 1.26+, and gh when --release is used.
+Needs Go 1.26+, and gh when --release is used. The release workflow in
+.github/workflows runs this on every push to main.
+
+Only the plugins listed in PLUGINS are built and listed in the catalog; the
+others in plugins/ are the upstream copies from lockyuk/silo-plugins.
 """
 import hashlib, json, os, subprocess, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-REPO = "lockyuk/silo-plugins"
+REPO = os.environ.get("GITHUB_REPOSITORY", "BEisem/silo-plugins")
+PLUGINS = os.environ.get("PLUGINS", "filmography").split()
 DIST = ROOT / "dist"
 ARCHES = ["amd64", "arm64"]
 
@@ -48,7 +53,8 @@ def main():
         for e in json.loads((ROOT / "manifest.json").read_text()).get("plugins", []):
             old[(e["manifest"]["plugin_id"], e["manifest"]["version"])] = e
     entries = []
-    for pdir in sorted((ROOT / "plugins").iterdir()):
+    for name in PLUGINS:
+        pdir = ROOT / "plugins" / name
         mpath = pdir / "manifest.json"
         if not mpath.exists():
             continue
@@ -74,7 +80,8 @@ def main():
             print(f"{out.name}  {digest}")
         entries.append({"manifest": numeric_enums(manifest), "repo_url": f"https://github.com/{REPO}", "binaries": binaries})
         if release:
-            sh("gh", "release", "create", tag, *assets, "--repo", REPO,
+            target = ["--target", os.environ["GITHUB_SHA"]] if os.environ.get("GITHUB_SHA") else []
+            sh("gh", "release", "create", tag, *assets, "--repo", REPO, *target,
                "--title", f"{pid} {version}", "--notes", f"{pid} {version}")
     (ROOT / "manifest.json").write_text(json.dumps({"plugins": entries}, indent=2) + "\n")
     print("wrote manifest.json with", len(entries), "plugin(s)")

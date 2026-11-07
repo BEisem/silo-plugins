@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	pluginv1 "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
+	"github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/runtimehost"
 )
 
 func intp(i int) *int { return &i }
@@ -86,9 +91,42 @@ func TestBuildPersonMergesRoles(t *testing.T) {
 	}
 }
 
-// fakeServers stands in for TMDB and Silo.
-func fakeServers(t *testing.T) (*App, func()) {
-	tmdb := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// fakeHost stands in for Silo's plugin host.
+type fakeHost struct {
+	// libraries maps a user id to the library ids that user may see.
+	libraries map[string][]string
+	// present maps "movie:<tmdb id>" / "tv:<tmdb id>" to where Silo has it.
+	present map[string]runtimehost.MediaPresence
+	batches []int
+	userIDs []string
+}
+
+func (f *fakeHost) ListLibraries(_ context.Context, userID string) ([]*pluginv1.Library, error) {
+	f.userIDs = append(f.userIDs, userID)
+	var out []*pluginv1.Library
+	for _, id := range f.libraries[userID] {
+		out = append(out, &pluginv1.Library{Id: id})
+	}
+	return out, nil
+}
+
+func (f *fakeHost) CheckMediaPresence(_ context.Context, provider, mediaType string, ids []string) (map[string]runtimehost.MediaPresence, error) {
+	if provider != "tmdb" || len(ids) > presenceBatch {
+		return nil, errors.New("bad presence call")
+	}
+	f.batches = append(f.batches, len(ids))
+	out := map[string]runtimehost.MediaPresence{}
+	for _, id := range ids {
+		if m, ok := f.present[mediaType+":"+id]; ok {
+			out[id] = m
+		}
+	}
+	return out, nil
+}
+
+// fakeTMDB serves Tom Hanks, a search, and 404s.
+func fakeTMDB(t *testing.T) *httptest.Server {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("api_key") != "k" {
 			w.WriteHeader(401)
 			w.Write([]byte(`{"status_message":"Invalid API key"}`))
@@ -108,31 +146,26 @@ func fakeServers(t *testing.T) (*App, func()) {
 			w.Write([]byte(`{"status_message":"not found"}`))
 		}
 	}))
-	silo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer sa_x" {
-			w.WriteHeader(401)
-			return
-		}
-		switch {
-		case r.URL.Path == "/api/v2/catalog/people":
-			w.Write([]byte(`{"items":[{"id":"55","name":"Tom Hanks Jr","tmdb_id":"999"},{"id":"77","name":"Tom Hanks","tmdb_id":"31"}]}`))
-		case r.URL.Path == "/api/v2/catalog/people/77":
-			w.Write([]byte(`{"id":"77","name":"Tom Hanks","tmdb_id":"31"}`))
-		case r.URL.Path == "/api/v2/catalog" && r.URL.Query().Get("person_id") == "77":
-			w.Write([]byte(`{"items":[{"content_id":"movie-tmdb-862","type":"movie"},{"content_id":"series-tvdb-370853","type":"series"}],"page":{"has_more":false}}`))
-		case r.URL.Path == "/api/v2/catalog/items/series-tvdb-370853":
-			w.Write([]byte(`{"tmdb_id":"46518"}`))
-		default:
-			w.WriteHeader(404)
-		}
-	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func testApp(t *testing.T, host libraryHost) *App {
 	a := newApp(hclog.NewNullLogger())
-	a.tmdbBase = tmdb.URL
-	a.configure(entries(map[string]map[string]any{
-		"tmdb": {"api_key": "k"},
-		"silo": {"api_key": "sa_x", "profile_id": "p", "base_url": silo.URL},
-	}))
-	return a, func() { tmdb.Close(); silo.Close() }
+	a.tmdbBase = fakeTMDB(t).URL
+	a.host = func() libraryHost { return host }
+	a.configure(entries(map[string]map[string]any{"tmdb": {"api_key": "k"}}))
+	return a
+}
+
+func defaultHost() *fakeHost {
+	return &fakeHost{
+		libraries: map[string][]string{"7": {"1"}, "8": {"1", "2"}},
+		present: map[string]runtimehost.MediaPresence{
+			"movie:862": {ExternalID: "862", MediaID: "movie-tmdb-862", LibraryID: "1"},
+			"tv:46518":  {ExternalID: "46518", MediaID: "series-tvdb-370853", LibraryID: "2"},
+		},
+	}
 }
 
 func entries(m map[string]map[string]any) []*pluginv1.ConfigEntry {
@@ -144,21 +177,43 @@ func entries(m map[string]map[string]any) []*pluginv1.ConfigEntry {
 	return out
 }
 
-func TestPersonMarksLibrary(t *testing.T) {
-	a, done := fakeServers(t)
-	defer done()
-	p, err := a.person(context.Background(), "31")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p.SiloPersonID != "77" || p.LibraryError != "" {
-		t.Fatalf("silo person = %q, error %q", p.SiloPersonID, p.LibraryError)
-	}
-	want := map[int]string{862: "movie-tmdb-862", 46518: "series-tvdb-370853", 13: ""}
+func contentIDs(p *Person) map[int]string {
+	out := map[int]string{}
 	for _, c := range p.Credits {
-		if c.ContentID != want[c.ID] {
-			t.Errorf("%s content id = %q, want %q", c.Title, c.ContentID, want[c.ID])
+		out[c.ID] = c.ContentID
+	}
+	return out
+}
+
+func TestPersonMarksOnlyLibrariesTheViewerSees(t *testing.T) {
+	host := defaultHost()
+	a := testApp(t, host)
+	for _, tc := range []struct {
+		user string
+		want map[int]string
+	}{
+		// User 7 can't see library 2, so the series there isn't marked.
+		{"7", map[int]string{862: "movie-tmdb-862", 46518: "", 13: ""}},
+		{"8", map[int]string{862: "movie-tmdb-862", 46518: "series-tvdb-370853", 13: ""}},
+		// A user with no libraries sees nothing marked.
+		{"9", map[int]string{862: "", 46518: "", 13: ""}},
+	} {
+		p, err := a.person(context.Background(), "31", tc.user)
+		if err != nil {
+			t.Fatal(err)
 		}
+		if p.LibraryError != "" {
+			t.Fatalf("user %s: library error %q", tc.user, p.LibraryError)
+		}
+		for id, want := range tc.want {
+			if got := contentIDs(p)[id]; got != want {
+				t.Errorf("user %s: title %d content id = %q, want %q", tc.user, id, got, want)
+			}
+		}
+	}
+	// Presence is shared between viewers; library lists are per viewer.
+	if len(host.batches) != 2 {
+		t.Errorf("presence calls = %v, want one movie and one tv call", host.batches)
 	}
 	// The cached TMDB answer must not carry library marks.
 	v, _ := a.cache.get("person:31")
@@ -169,52 +224,146 @@ func TestPersonMarksLibrary(t *testing.T) {
 	}
 }
 
-func TestPersonWithoutSiloKeyStillWorks(t *testing.T) {
-	a, done := fakeServers(t)
-	defer done()
-	a.configure(entries(map[string]map[string]any{"tmdb": {"api_key": "k"}}))
-	p, err := a.person(context.Background(), "31")
-	if err != nil {
+func TestPersonFailsClosedWithoutAViewer(t *testing.T) {
+	host := defaultHost()
+	for _, tc := range []struct {
+		name string
+		user string
+		host libraryHost
+		want string
+	}{
+		{"no user", "", host, "who is signed in"},
+		{"bad user", "7 OR 1", host, "who is signed in"},
+		{"zero user", "0", host, "who is signed in"},
+		{"host not connected", "7", nil, "not connected"},
+	} {
+		a := testApp(t, tc.host)
+		p, err := a.person(context.Background(), "31", tc.user)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(p.Credits) != 3 || !strings.Contains(p.LibraryError, tc.want) {
+			t.Errorf("%s: credits %d, error %q", tc.name, len(p.Credits), p.LibraryError)
+		}
+		for id, cid := range contentIDs(p) {
+			if cid != "" {
+				t.Errorf("%s: title %d marked without a viewer", tc.name, id)
+			}
+		}
+	}
+	// ListLibraries with an empty user lists every library, so it must
+	// never be called without one.
+	for _, u := range host.userIDs {
+		if u == "" {
+			t.Fatal("ListLibraries was called without a user id")
+		}
+	}
+}
+
+func TestPresenceBatches(t *testing.T) {
+	host := &fakeHost{libraries: map[string][]string{"7": {"1"}}}
+	a := testApp(t, host)
+	var credits []Credit
+	for i := 1; i <= 250; i++ {
+		credits = append(credits, Credit{ID: i, Media: "movie"}, Credit{ID: i, Media: "movie"})
+	}
+	if _, err := a.library(context.Background(), "1", credits, "7"); err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Credits) != 3 || !strings.Contains(p.LibraryError, "no Silo API key") {
-		t.Fatalf("credits %d, error %q", len(p.Credits), p.LibraryError)
+	if fmt.Sprint(host.batches) != "[100 100 50]" {
+		t.Errorf("batches = %v, want [100 100 50] (duplicates merged)", host.batches)
+	}
+}
+
+func TestRequestSetting(t *testing.T) {
+	a := testApp(t, defaultHost())
+	if p, _ := a.person(context.Background(), "31", "7"); !p.CanRequest {
+		t.Error("Request button should be on by default")
+	}
+	a.configure(entries(map[string]map[string]any{
+		"tmdb":     {"api_key": "k"},
+		"requests": {"hide_request_button": true},
+	}))
+	if p, _ := a.person(context.Background(), "31", "7"); p.CanRequest {
+		t.Error("Request button should follow the admin setting")
+	}
+}
+
+func TestPageCSP(t *testing.T) {
+	html := string(page)
+	if strings.Contains(html, "__CSP__") {
+		t.Fatal("CSP placeholder was not filled in")
+	}
+	start := strings.Index(html, "<script>") + len("<script>")
+	end := strings.Index(html, "</script>")
+	sum := sha256.Sum256([]byte(html[start:end]))
+	want := "script-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+	if !strings.Contains(html, want) {
+		t.Errorf("CSP does not allow the page script by hash")
+	}
+	if strings.Index(html, `http-equiv="Content-Security-Policy"`) > strings.Index(html, "<script>") {
+		t.Error("CSP must come before the script")
 	}
 }
 
 func TestRoutes(t *testing.T) {
-	a, done := fakeServers(t)
-	defer done()
+	a := testApp(t, defaultHost())
 	s := &routeServer{app: a}
-	call := func(path string, q map[string]any) *pluginv1.HandleHTTPResponse {
+	call := func(method, path string, q map[string]any, headers map[string]string) *pluginv1.HandleHTTPResponse {
 		st, _ := structpb.NewStruct(q)
-		r, err := s.Handle(context.Background(), &pluginv1.HandleHTTPRequest{Method: "GET", Path: path, Query: st})
+		r, err := s.Handle(context.Background(), &pluginv1.HandleHTTPRequest{Method: method, Path: path, Query: st, Headers: headers})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r
 	}
-	if r := call("/filmography/", nil); r.StatusCode != 200 || !strings.Contains(string(r.Body), "<title>Filmography</title>") {
+	get := func(path string, q map[string]any) *pluginv1.HandleHTTPResponse { return call("GET", path, q, nil) }
+	if r := get("/filmography/", nil); r.StatusCode != 200 || !strings.Contains(string(r.Body), "<title>Filmography</title>") {
 		t.Errorf("page = %d", r.StatusCode)
 	}
-	r := call("/api/search", map[string]any{"q": []any{"tom"}})
+	r := get("/api/search", map[string]any{"q": []any{"tom"}})
 	if r.StatusCode != 200 || !strings.Contains(string(r.Body), `"Tom Hanks"`) || strings.Contains(string(r.Body), `"X"`) {
 		t.Errorf("search = %d %s", r.StatusCode, r.Body)
 	}
-	if r := call("/api/person/31", nil); r.StatusCode != 200 {
+	// Silo's identity header reaches library matching, whatever its case.
+	r = call("GET", "/api/person/31", nil, map[string]string{"x-silo-user-id": "7"})
+	if r.StatusCode != 200 || !strings.Contains(string(r.Body), `"movie-tmdb-862"`) || !strings.Contains(string(r.Body), `"can_request":true`) {
 		t.Errorf("person = %d %s", r.StatusCode, r.Body)
 	}
-	if r := call("/api/person/../x", nil); r.StatusCode != 400 {
+	if r := get("/api/person/31", nil); r.StatusCode != 200 || strings.Contains(string(r.Body), `"movie-tmdb-862"`) {
+		t.Errorf("person without a viewer = %d %s", r.StatusCode, r.Body)
+	}
+	if r := get("/api/person/../x", nil); r.StatusCode != 400 {
 		t.Errorf("bad id = %d", r.StatusCode)
 	}
-	if r := call("/api/person/4040", nil); r.StatusCode != 404 {
+	if r := get("/api/person/4040", nil); r.StatusCode != 404 {
 		t.Errorf("unknown person = %d %s", r.StatusCode, r.Body)
 	}
-	if r := call("/api/silo-person/77", nil); r.StatusCode != 200 || !strings.Contains(string(r.Body), `"31"`) {
-		t.Errorf("silo person = %d %s", r.StatusCode, r.Body)
+	if r := get("/api/silo-person/77", nil); r.StatusCode != 404 {
+		t.Errorf("removed silo-person route = %d", r.StatusCode)
+	}
+	if r := call("POST", "/api/person/31", nil, nil); r.StatusCode != 405 {
+		t.Errorf("POST = %d", r.StatusCode)
 	}
 	a.configure(entries(map[string]map[string]any{"tmdb": {"api_key": "wrong"}}))
-	if r := call("/api/person/31", nil); r.StatusCode != 502 || !strings.Contains(string(r.Body), "Invalid API key") {
+	if r := get("/api/person/31", nil); r.StatusCode != 502 || !strings.Contains(string(r.Body), "Invalid API key") {
 		t.Errorf("bad key = %d %s", r.StatusCode, r.Body)
+	}
+}
+
+type failingHost struct{ fakeHost }
+
+func (failingHost) ListLibraries(context.Context, string) ([]*pluginv1.Library, error) {
+	return nil, errors.New("rpc error: internal detail 10.0.0.5:5432")
+}
+
+func TestHostErrorsStayInTheLog(t *testing.T) {
+	a := testApp(t, failingHost{})
+	p, err := a.person(context.Background(), "31", "7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(p.LibraryError, "10.0.0.5") || !strings.Contains(p.LibraryError, "couldn't check the library") {
+		t.Errorf("library error = %q", p.LibraryError)
 	}
 }

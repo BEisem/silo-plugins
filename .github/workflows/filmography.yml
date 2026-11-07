@@ -1,0 +1,74 @@
+name: Filmography
+
+# Tests every push and pull request. On main, also publishes a release for a
+# version that hasn't been released yet and updates the catalog manifest.json.
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "plugins/filmography/**"
+      - "scripts/build.py"
+      - ".github/workflows/filmography.yml"
+  pull_request:
+    paths:
+      - "plugins/filmography/**"
+      - "scripts/build.py"
+      - ".github/workflows/filmography.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: filmography-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/filmography
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: plugins/filmography/go.mod
+          cache-dependency-path: plugins/filmography/go.sum
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test -race ./...
+      - name: Build both architectures
+        run: make build build-arm64
+
+  release:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: plugins/filmography/go.mod
+          cache-dependency-path: plugins/filmography/go.sum
+      - name: Build and publish any unreleased version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/build.py --release
+      - name: Commit the catalog
+        run: |
+          if git diff --quiet -- manifest.json; then
+            echo "Catalog unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "chore(catalog): publish filmography $(jq -r .version plugins/filmography/manifest.json)"
+          git push

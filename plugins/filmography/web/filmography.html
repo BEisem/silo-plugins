@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
+<meta name="referrer" content="same-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Filmography</title>
 <style>
@@ -21,6 +23,8 @@ button, select, input { font: inherit; color: inherit; }
 .top { position: sticky; top: 0; z-index: 20; background: rgba(13,15,19,.92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
 .top .wrap { display: flex; align-items: center; gap: 16px; padding-top: 12px; padding-bottom: 12px; }
 .brand { font-weight: 700; font-size: 18px; cursor: pointer; white-space: nowrap; }
+.back { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; color: var(--text); font-size: 14px; white-space: nowrap; }
+.back:hover { border-color: var(--accent); text-decoration: none; }
 .search { flex: 1; position: relative; max-width: 560px; }
 .search input { width: 100%; padding: 10px 14px 10px 38px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; outline: none; }
 .search input:focus { border-color: var(--accent); }
@@ -82,6 +86,9 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
 .card .po.none { display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px; color: var(--muted); font-size: 13px; }
 .card.inlib .po { box-shadow: 0 0 0 2px var(--lib); }
 .badge { position: absolute; left: 8px; top: 8px; background: var(--lib); color: #062615; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.req { position: absolute; left: 8px; bottom: 8px; border: 0; background: var(--accent); color: #08142b; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.4); }
+.req:hover, .req:focus-visible { filter: brightness(1.12); }
+.row .req { position: static; flex: none; box-shadow: none; }
 .mtype { position: absolute; right: 8px; top: 8px; background: rgba(0,0,0,.72); font-size: 11px; padding: 2px 7px; border-radius: 6px; }
 .zoom { position: absolute; right: 8px; bottom: 8px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(0,0,0,.7); cursor: zoom-in; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; }
 .card:hover .zoom, .zoom:focus { opacity: 1; }
@@ -125,6 +132,7 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
   .wrap { padding: 0 16px 40px; }
   .top .wrap { gap: 10px; }
   .brand { font-size: 16px; }
+  .back .long { display: none; }
   .hero { margin: 0 -16px; padding: 20px 16px; }
   .hero .in { flex-direction: column; align-items: center; text-align: center; gap: 18px; }
   .headshot { width: 200px; }
@@ -141,6 +149,7 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
 </head>
 <body>
 <div class="top"><div class="wrap">
+  <a class="back" id="back" href="/"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back<span class="long"> to Silo</span></span></a>
   <div class="brand" id="home">Filmography</div>
   <div class="search">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -171,7 +180,9 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
   function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
   function savePrefs() { try { localStorage.setItem("filmography.prefs", JSON.stringify({ media: state.media, role: prefs.role, sort: state.sort, view: state.view, self: state.self })); } catch {} }
   function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-  function img(path, size) { return path ? IMG + size + path : ""; }
+  // TMDB image paths look like "/abc123.jpg". Anything else is dropped, so a
+  // path can't break out of the url('...') it is placed in.
+  function img(path, size) { return typeof path === "string" && /^\/[A-Za-z0-9_-]+\.(jpg|jpeg|png|webp|svg)$/.test(path) ? IMG + size + path : ""; }
   function year(d) { return d ? d.slice(0, 4) : ""; }
 
   async function api(path) {
@@ -184,18 +195,25 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
   function spinner() { main.innerHTML = '<div class="spin"></div>'; }
   function showError(msg) { main.innerHTML = '<div class="warn">' + esc(msg) + "</div>"; }
 
+  // ---------- Back to Silo ----------
+  // Return to the Silo page that opened the plugin, or Silo's home page. Only
+  // a page on this origin outside the plugin counts, and the target is
+  // rebuilt against this origin so "//other.host" can't slip through.
+  const PLUGIN_PREFIX = "/api/v2/plugin-content/";
+  function backTarget() {
+    try {
+      const ref = new URL(document.referrer);
+      if (ref.origin !== location.origin || ref.pathname.startsWith(PLUGIN_PREFIX)) return "/";
+      const u = new URL(ref.pathname + ref.search + ref.hash, location.origin);
+      return u.origin === location.origin ? u.pathname + u.search + u.hash : "/";
+    } catch { return "/"; }
+  }
+  document.getElementById("back").href = backTarget();
+
   // ---------- Routing ----------
-  let firstLoad = true;
   function route() {
     const p = new URLSearchParams(location.search);
     if (p.get("person")) return openPerson(p.get("person"), false);
-    if (p.get("silo")) return openSilo(p.get("silo"));
-    // Opened from an actor page in Silo (first load only): show that person.
-    const ref = (document.referrer || "").match(/^https?:\/\/[^/]+\/person\/([^/?#]+)/);
-    if (ref && document.referrer.indexOf(location.origin) === 0 && firstLoad) {
-      firstLoad = false;
-      return openSilo(decodeURIComponent(ref[1]));
-    }
     const q = p.get("q") || "";
     qIn.value = q;
     return runSearch(q, false);
@@ -217,11 +235,9 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
   qIn.addEventListener("keydown", e => { if (e.key === "Enter") { clearTimeout(searchTimer); handleInput(qIn.value.trim()); } });
 
   function handleInput(v) {
-    // A pasted TMDB person link, or a Silo person link or id.
-    let m = v.match(/themoviedb\.org\/person\/(\d+)/);
+    // A pasted TMDB person link.
+    const m = v.match(/themoviedb\.org\/person\/(\d+)/);
     if (m) { qIn.value = ""; return openPerson(m[1], true); }
-    m = v.match(/(?:person|people)[\/=](\d{6,})/) || v.match(/^(\d{10,})$/);
-    if (m) { qIn.value = ""; go({ silo: m[1] }); return openSilo(m[1]); }
     runSearch(v, true);
   }
 
@@ -254,19 +270,10 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
     return '<svg viewBox="0 0 100 150" width="100%" height="100%"><circle cx="50" cy="55" r="20" fill="#2f3643"/><path d="M14 130c3-28 18-42 36-42s33 14 36 42z" fill="#2f3643"/></svg>';
   }
 
-  async function openSilo(id) {
-    const seq = ++seqNo;
-    spinner();
-    try {
-      const r = await api("silo-person/" + id);
-      if (seq !== seqNo) return;
-      history.replaceState(null, "", "?person=" + encodeURIComponent(r.tmdb_id));
-      openPerson(r.tmdb_id, false);
-    } catch (e) { if (seq === seqNo) showError(e.message); }
-  }
-
   // ---------- Person ----------
   async function openPerson(id, push) {
+    id = String(id);
+    if (!/^\d{1,20}$/.test(id)) return showError("That isn't a TMDB person id.");
     if (push) go({ person: id });
     const seq = ++seqNo;
     spinner();
@@ -397,6 +404,17 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
     }).filter(Boolean).join(" · ");
   }
 
+  // Silo's own title page for a TMDB title, where Silo offers the request
+  // and applies its permissions, approval and limits. Ids are numbers from
+  // TMDB, and media is one of two fixed values.
+  function requestHref(c) {
+    const id = Number(c.id);
+    if (!Number.isSafeInteger(id) || id <= 0) return "";
+    return "/title/" + (c.media === "tv" ? "series" : "movie") + "/" + id;
+  }
+  const canRequest = c => person.can_request && !c.content_id && requestHref(c) !== "";
+  const reqButton = i => '<button class="req" data-i="' + i + '" aria-label="Request in Silo">Request</button>';
+
   // Library titles open in Silo; the rest open on TMDB.
   function hrefOf(c) {
     return c.content_id
@@ -424,10 +442,12 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
           '<div class="th" data-i="' + i + '" style="background-image:url(\'' + img(c.poster, "w154") + '\')"></div>' +
           '<div class="tx"><b>' + esc(c.title) + '</b> <span style="color:var(--muted)">' + (c.media === "tv" ? "· TV " : "") + (!dated && c.date ? "· " + year(c.date) : "") + "</span><div>" + roleText(c) + "</div></div>" +
           (c.content_id ? '<span class="il">▶ In library</span>' : "") +
+          (canRequest(c) ? reqButton(i) : "") +
           (c.votes >= 20 ? '<span class="vt">★ ' + c.vote.toFixed(1) + "</span>" : "") + "</a>";
       });
       box.innerHTML = html + "</div>";
       box.querySelectorAll(".th").forEach(t => t.onclick = e => { e.preventDefault(); e.stopPropagation(); zoom(+t.dataset.i); });
+      wireRequests(box, list);
       return;
     }
 
@@ -437,12 +457,24 @@ h2 { font-size: 20px; margin: 28px 0 14px; }
         (c.poster ? '<div class="po" style="background-image:url(\'' + img(c.poster, "w342") + '\')">' : '<div class="po none">' + esc(c.title)) +
           (c.content_id ? '<span class="badge">In library</span>' : "") +
           (c.media === "tv" ? '<span class="mtype">TV</span>' : "") +
+          (canRequest(c) ? reqButton(i) : "") +
           (c.poster ? '<button class="zoom" data-i="' + i + '" aria-label="View full poster"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>' : "") +
         "</div>" +
         '<div class="t">' + esc(c.title) + '</div><div class="y">' + esc(year(c.date) || "TBA") + (c.votes >= 20 ? " · ★ " + c.vote.toFixed(1) : "") + "</div>" +
         '<div class="r">' + roleText(c) + "</div></a>";
     }).join("") + "</div>";
     box.querySelectorAll(".zoom").forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); zoom(+b.dataset.i); });
+    wireRequests(box, list);
+  }
+
+  // The Request button sits inside the title's link, so it stops that link
+  // and opens Silo's page for the title instead.
+  function wireRequests(box, list) {
+    box.querySelectorAll(".req").forEach(b => b.onclick = e => {
+      e.preventDefault(); e.stopPropagation();
+      const href = requestHref(list[+b.dataset.i]);
+      if (href) location.assign(href);
+    });
   }
 
   // ---------- Lightbox ----------

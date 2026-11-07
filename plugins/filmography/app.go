@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -14,19 +13,20 @@ import (
 
 	pluginv1 "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
 	sdkruntime "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/runtime"
+	"github.com/Silo-Server/silo-plugin-sdk/pkg/pluginsdk/runtimehost"
 )
 
 // Config is the admin form configuration Silo delivers through Configure.
 type Config struct {
-	TMDBKey   string
-	Language  string
-	APIKey    string
-	ProfileID string
-	BaseURL   string
+	TMDBKey  string
+	Language string
+	// ShowRequests offers a Request button on titles that aren't in the
+	// library. It is on unless an admin turns it off.
+	ShowRequests bool
 }
 
 func parseConfig(entries []*pluginv1.ConfigEntry) Config {
-	var cfg Config
+	cfg := Config{ShowRequests: true}
 	for _, e := range entries {
 		if e == nil || e.GetValue() == nil {
 			continue
@@ -37,13 +37,21 @@ func parseConfig(entries []*pluginv1.ConfigEntry) Config {
 		case "tmdb":
 			cfg.TMDBKey = get("api_key")
 			cfg.Language = get("language")
-		case "silo":
-			cfg.APIKey = get("api_key")
-			cfg.ProfileID = get("profile_id")
-			cfg.BaseURL = strings.TrimRight(get("base_url"), "/")
+		case "requests":
+			if hide, ok := v["hide_request_button"].(bool); ok {
+				cfg.ShowRequests = !hide
+			}
 		}
 	}
 	return cfg
+}
+
+// libraryHost is the part of Silo's plugin host the plugin uses to mark
+// library titles. Both calls go over the plugin's own connection to Silo,
+// so the plugin needs no Silo API key.
+type libraryHost interface {
+	ListLibraries(ctx context.Context, userID string) ([]*pluginv1.Library, error)
+	CheckMediaPresence(ctx context.Context, provider, mediaType string, ids []string) (map[string]runtimehost.MediaPresence, error)
 }
 
 type App struct {
@@ -52,15 +60,11 @@ type App struct {
 	mu  sync.RWMutex
 	cfg Config
 
-	profileMu sync.Mutex
-	profileID string
-
 	cache cache
 
-	// tmdbOf maps a Silo series content id to its TMDB id. Ids don't
-	// change, so it is never expired.
-	idMu   sync.Mutex
-	tmdbOf map[string]string
+	// host returns Silo's plugin host, or nil before it is connected.
+	// Tests replace it.
+	host func() libraryHost
 
 	// tmdbBase replaces the TMDB API address in tests.
 	tmdbBase string
@@ -70,10 +74,22 @@ const (
 	personTTL  = 6 * time.Hour
 	searchTTL  = 30 * time.Minute
 	libraryTTL = 5 * time.Minute
+
+	// presenceBatch is the most ids Silo checks in one CheckMediaPresence call.
+	presenceBatch = 100
 )
 
 func newApp(log hclog.Logger) *App {
-	return &App{log: log, tmdbOf: map[string]string{}}
+	return &App{log: log, host: siloHost}
+}
+
+// siloHost returns the connected host. It returns a nil interface, not an
+// interface holding a nil pointer, while the host isn't connected.
+func siloHost() libraryHost {
+	if h := sdkruntime.Host(); h != nil {
+		return h
+	}
+	return nil
 }
 
 func (a *App) configure(entries []*pluginv1.ConfigEntry) {
@@ -113,57 +129,13 @@ func (a *App) wikiLang() string {
 	return lang
 }
 
-func (a *App) endpoint(ctx context.Context) string {
-	if base := a.config().BaseURL; base != "" {
-		return base
-	}
-	if h := sdkruntime.Host(); h != nil {
-		if info, err := h.GetHostInfo(ctx); err == nil && info.InternalBaseURL != "" {
-			return loopbackURL(info.InternalBaseURL)
-		}
-	}
-	return "http://127.0.0.1:8080"
-}
+// siloUserID matches the user id Silo stamps on plugin requests.
+var siloUserID = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
 
-func loopbackURL(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return raw
-	}
-	host, port, err := net.SplitHostPort(u.Host)
-	if err != nil {
-		return strings.TrimRight(raw, "/")
-	}
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		u.Host = net.JoinHostPort("127.0.0.1", port)
-	}
-	return strings.TrimRight(u.String(), "/")
-}
-
-func (a *App) client(ctx context.Context) (*SiloClient, error) {
-	cfg := a.config()
-	if cfg.APIKey == "" {
-		return nil, errors.New("no Silo API key, so library titles aren't marked: an admin can add one in this plugin's Silo connection settings")
-	}
-	c := newSiloClient(a.endpoint(ctx), cfg.APIKey, cfg.ProfileID)
-	if cfg.ProfileID != "" {
-		return c, nil
-	}
-	a.profileMu.Lock()
-	defer a.profileMu.Unlock()
-	if a.profileID == "" {
-		id, err := c.PrimaryProfile(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("finding a profile for the API key: %w", err)
-		}
-		a.profileID = id
-	}
-	c.profile = a.profileID
-	return c, nil
-}
-
-// person returns a person's page data with library titles marked.
-func (a *App) person(ctx context.Context, id string) (*Person, error) {
+// person returns a person's page data with the titles the viewer can see in
+// the library marked. userID is the viewer's Silo user id, as Silo stamped
+// it on the request.
+func (a *App) person(ctx context.Context, id, userID string) (*Person, error) {
 	var base *Person
 	if v, ok := a.cache.get("person:" + id); ok {
 		base = v.(*Person)
@@ -183,86 +155,118 @@ func (a *App) person(ctx context.Context, id string) (*Person, error) {
 	// Copy so marking the library never touches the cached value.
 	p := *base
 	p.Credits = append([]Credit(nil), base.Credits...)
-	lib, err := a.library(ctx, p.Name, id)
+	p.CanRequest = a.config().ShowRequests
+	items, err := a.library(ctx, id, p.Credits, userID)
 	if err != nil {
 		a.log.Warn("library lookup failed", "person", id, "error", err)
-		p.LibraryError = err.Error()
+		// Host errors stay in the log; the viewer gets a plain sentence.
+		var shown viewerError
+		if errors.As(err, &shown) {
+			p.LibraryError = shown.Error()
+		} else {
+			p.LibraryError = "couldn't check the library right now, so library titles aren't marked"
+		}
 		return &p, nil
 	}
-	p.SiloPersonID = lib.personID
 	for i := range p.Credits {
 		c := &p.Credits[i]
-		c.ContentID = lib.items[fmt.Sprintf("%s:%d", c.Media, c.ID)]
+		c.ContentID = items[creditKey(c.Media, c.ID)]
 	}
 	return &p, nil
 }
 
-type libraryMatch struct {
-	personID string
-	// items maps "movie:<tmdb id>" and "tv:<tmdb id>" to Silo content ids.
-	items map[string]string
+func creditKey(media string, id int) string { return fmt.Sprintf("%s:%d", media, id) }
+
+// viewerError is an error whose text is fit to show on the page.
+type viewerError string
+
+func (e viewerError) Error() string { return string(e) }
+
+// library maps "movie:<tmdb id>" and "tv:<tmdb id>" to Silo content ids for
+// the credits that are in a library the viewer may see.
+func (a *App) library(ctx context.Context, personID string, credits []Credit, userID string) (map[string]string, error) {
+	if !siloUserID.MatchString(userID) {
+		// Silo stamps the viewer on every signed-in request. Without it the
+		// plugin can't tell which libraries to show, so it shows none.
+		return nil, viewerError("couldn't tell who is signed in, so library titles aren't marked")
+	}
+	h := a.host()
+	if h == nil {
+		return nil, viewerError("not connected to Silo yet, so library titles aren't marked; reload in a moment")
+	}
+	visible, err := a.visibleLibraries(ctx, h, userID)
+	if err != nil {
+		return nil, err
+	}
+	present, err := a.presence(ctx, h, personID, credits)
+	if err != nil {
+		return nil, err
+	}
+	items := make(map[string]string, len(present))
+	for key, m := range present {
+		if visible[m.LibraryID] {
+			items[key] = m.MediaID
+		}
+	}
+	return items, nil
 }
 
-// library finds the titles Silo credits the person on.
-func (a *App) library(ctx context.Context, name, tmdbID string) (*libraryMatch, error) {
-	if v, ok := a.cache.get("library:" + tmdbID); ok {
-		return v.(*libraryMatch), nil
+// visibleLibraries returns the ids of the libraries Silo lets the user see.
+func (a *App) visibleLibraries(ctx context.Context, h libraryHost, userID string) (map[string]bool, error) {
+	key := "libraries:" + userID
+	if v, ok := a.cache.get(key); ok {
+		return v.(map[string]bool), nil
 	}
-	c, err := a.client(ctx)
+	libs, err := h.ListLibraries(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listing your libraries: %w", err)
 	}
-	m := &libraryMatch{items: map[string]string{}}
-	sp, err := c.findPerson(ctx, name, tmdbID)
-	if err != nil {
-		return nil, err
-	}
-	if sp != nil {
-		m.personID = sp.ID
-		cards, err := c.personTitles(ctx, sp.ID)
-		if err != nil {
-			return nil, err
+	visible := make(map[string]bool, len(libs))
+	for _, l := range libs {
+		if id := l.GetId(); id != "" {
+			visible[id] = true
 		}
-		for _, card := range cards {
-			media, tid := a.cardTMDB(ctx, c, card)
-			if tid != "" {
-				m.items[media+":"+tid] = card.ContentID
+	}
+	a.cache.put(key, visible, libraryTTL)
+	return visible, nil
+}
+
+// presence asks Silo which of a person's titles it has, whoever may see
+// them. The answer is the same for every viewer, so it is cached per person
+// and filtered per viewer afterwards.
+func (a *App) presence(ctx context.Context, h libraryHost, personID string, credits []Credit) (map[string]runtimehost.MediaPresence, error) {
+	key := "presence:" + personID
+	if v, ok := a.cache.get(key); ok {
+		return v.(map[string]runtimehost.MediaPresence), nil
+	}
+	ids := map[string][]string{}
+	seen := map[string]bool{}
+	for _, c := range credits {
+		if c.Media != "movie" && c.Media != "tv" {
+			continue
+		}
+		k := creditKey(c.Media, c.ID)
+		if !seen[k] {
+			seen[k] = true
+			ids[c.Media] = append(ids[c.Media], fmt.Sprint(c.ID))
+		}
+	}
+	out := map[string]runtimehost.MediaPresence{}
+	for _, media := range []string{"movie", "tv"} {
+		list := ids[media]
+		for start := 0; start < len(list); start += presenceBatch {
+			batch := list[start:min(start+presenceBatch, len(list))]
+			found, err := h.CheckMediaPresence(ctx, "tmdb", media, batch)
+			if err != nil {
+				return nil, fmt.Errorf("checking the library: %w", err)
+			}
+			for id, m := range found {
+				out[media+":"+id] = m
 			}
 		}
 	}
-	a.cache.put("library:"+tmdbID, m, libraryTTL)
-	return m, nil
-}
-
-// cardTMDB works out a library item's TMDB id. Movie and some series ids
-// carry it ("movie-tmdb-862"); other series are looked up once.
-func (a *App) cardTMDB(ctx context.Context, c *SiloClient, card libraryCard) (media, id string) {
-	switch card.Type {
-	case "movie":
-		media = "movie"
-	case "series":
-		media = "tv"
-	default:
-		return "", ""
-	}
-	if rest, ok := strings.CutPrefix(card.ContentID, card.Type+"-tmdb-"); ok {
-		return media, rest
-	}
-	a.idMu.Lock()
-	id, known := a.tmdbOf[card.ContentID]
-	a.idMu.Unlock()
-	if known {
-		return media, id
-	}
-	id, err := c.itemTMDBID(ctx, card.ContentID)
-	if err != nil {
-		a.log.Warn("item lookup failed", "content_id", card.ContentID, "error", err)
-		return media, ""
-	}
-	a.idMu.Lock()
-	a.tmdbOf[card.ContentID] = id
-	a.idMu.Unlock()
-	return media, id
+	a.cache.put(key, out, libraryTTL)
+	return out, nil
 }
 
 func (a *App) search(ctx context.Context, q string) ([]PersonSummary, error) {
@@ -285,20 +289,4 @@ func (a *App) search(ctx context.Context, q string) ([]PersonSummary, error) {
 	}
 	a.cache.put(key, res, searchTTL)
 	return res, nil
-}
-
-// siloPersonTMDB resolves a Silo person id to their TMDB id.
-func (a *App) siloPersonTMDB(ctx context.Context, id string) (string, error) {
-	c, err := a.client(ctx)
-	if err != nil {
-		return "", err
-	}
-	p, err := c.person(ctx, id)
-	if err != nil {
-		return "", err
-	}
-	if p.TMDBID == "" {
-		return "", fmt.Errorf("%s has no TMDB id in Silo", p.Name)
-	}
-	return p.TMDBID, nil
 }

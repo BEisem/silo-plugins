@@ -1,6 +1,6 @@
 {
-  "plugin_id": "community.filmography",
-  "version": "1.1.1",
+  "plugin_id": "beisem.filmography",
+  "version": "1.2.0",
   "checksum": "__CHECKSUM__",
   "silo_api_version": "v1",
   "category": "Metadata",
@@ -68,69 +68,35 @@
       }
     },
     {
-      "key": "silo",
-      "title": "Silo connection",
-      "description": "An API key from an admin account, used to mark the titles that are in your library.",
-      "required": true,
-      "json_schema": "{\"type\":\"object\",\"properties\":{\"api_key\":{\"type\":\"string\"},\"profile_id\":{\"type\":\"string\"},\"base_url\":{\"type\":\"string\"}},\"additionalProperties\":false}",
+      "key": "requests",
+      "title": "Requests",
+      "description": "Titles that aren't in the library can offer a Request button that opens Silo's own request page.",
+      "required": false,
+      "json_schema": "{\"type\":\"object\",\"properties\":{\"hide_request_button\":{\"type\":\"boolean\"}},\"additionalProperties\":false}",
       "admin_form": {
         "fields": [
           {
-            "key": "api_key",
-            "label": "Admin API key",
-            "description": "Create one under Settings \u2192 API keys while signed in as an admin. Starts with sa_.",
-            "control": "ADMIN_FORM_CONTROL_PASSWORD",
-            "secret": true,
-            "required": true
-          },
-          {
-            "key": "profile_id",
-            "label": "Profile ID",
-            "description": "Leave empty to use the key owner's primary profile. Use an unrestricted profile so nothing is hidden.",
-            "control": "ADMIN_FORM_CONTROL_TEXT"
-          },
-          {
-            "key": "base_url",
-            "label": "Internal API URL override",
-            "description": "Leave empty; the plugin asks Silo for its own listener.",
-            "control": "ADMIN_FORM_CONTROL_TEXT",
-            "placeholder": "http://127.0.0.1:8080"
+            "key": "hide_request_button",
+            "label": "Hide Request button",
+            "description": "Turn on if requests aren't enabled on this server. Silo decides who may request and applies its own approval and limits.",
+            "control": "ADMIN_FORM_CONTROL_SWITCH"
           }
         ],
-        "sections": [
-          {
-            "key": "main",
-            "title": "Connection",
-            "field_keys": [
-              "api_key"
-            ]
-          },
-          {
-            "key": "advanced",
-            "title": "Advanced",
-            "collapsible": true,
-            "collapsed_default": true,
-            "field_keys": [
-              "profile_id",
-              "base_url"
-            ]
-          }
-        ],
-        "submit_label": "Save connection"
+        "submit_label": "Save request settings"
       }
     }
   ],
   "presentation": {
     "display_name": "Filmography",
-    "summary": "Full actor filmographies for Silo, with every film and TV role, full-size photos and links to TMDB, IMDb and Wikipedia.",
-    "description_markdown": "Adds a **Filmography** page to the menu. Search for any actor or crew member to see:\n\n- Every film and TV credit from TMDB, filterable by movies, TV, acting and crew, and sortable by date, popularity, rating or title\n- Titles already in your library marked and linked straight to them in Silo\n- A full-size headshot and the complete photo gallery in a lightbox\n- Links to TMDB, IMDb, Wikipedia, Wikidata, Instagram, X, TikTok, Facebook, YouTube and their homepage",
-    "setup_markdown": "1. Paste a TMDB API key into **TMDB** (free from themoviedb.org \u2192 Settings \u2192 API).\n2. Paste an admin API key into **Silo connection**.\n3. Open **Filmography** in the menu.",
-    "publisher_name": "locky.uk",
+    "summary": "Full actor filmographies for Silo, with every film and TV role, library titles marked, a Request button for the rest, full-size photos and links to TMDB, IMDb and Wikipedia.",
+    "description_markdown": "Adds a **Filmography** page to the menu. Search for any actor or crew member to see:\n\n- Every film and TV credit from TMDB, filterable by movies, TV, acting and crew, and sortable by date, popularity, rating or title\n- Titles already in your library marked and linked straight to them in Silo, counting only the libraries you can see\n- A Request button on titles you don't have, which opens Silo's own request page\n- A full-size headshot and the complete photo gallery in a lightbox\n- Links to TMDB, IMDb, Wikipedia, Wikidata, Instagram, X, TikTok, Facebook, YouTube and their homepage\n\nNeeds only a TMDB API key: library titles are checked through Silo's plugin host, so the plugin holds no Silo credentials.\n\nBased on lockyuk's Filmography plugin (MIT).",
+    "setup_markdown": "1. Paste a TMDB API key into **TMDB** (free from themoviedb.org \u2192 Settings \u2192 API).\n2. If requests aren't enabled on this server, turn on **Hide Request button** under **Requests**.\n3. Open **Filmography** in the menu.",
+    "publisher_name": "BEisem",
     "license_spdx": "MIT",
-    "homepage_url": "https://github.com/lockyuk/silo-plugins/tree/main/plugins/filmography",
-    "source_url": "https://github.com/lockyuk/silo-plugins",
-    "support_url": "https://github.com/lockyuk/silo-plugins/issues",
-    "changelog_url": "https://github.com/lockyuk/silo-plugins/releases",
-    "publisher_url": "https://github.com/lockyuk"
+    "homepage_url": "https://github.com/BEisem/silo-plugins/tree/main/plugins/filmography",
+    "source_url": "https://github.com/BEisem/silo-plugins",
+    "support_url": "https://github.com/BEisem/silo-plugins/issues",
+    "changelog_url": "https://github.com/BEisem/silo-plugins/releases",
+    "publisher_url": "https://github.com/BEisem"
   }
 }

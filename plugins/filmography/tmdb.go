@@ -16,6 +16,30 @@ import (
 
 const tmdbBase = "https://api.themoviedb.org/3"
 
+// apiError is a non-2xx answer from TMDB.
+type apiError struct {
+	Status int
+	Detail string
+}
+
+func (e *apiError) Error() string {
+	return fmt.Sprintf("%s (HTTP %d)", e.Detail, e.Status)
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
 type TMDB struct {
 	key      string
 	language string
@@ -226,8 +250,8 @@ type Person struct {
 	Images      []Image  `json:"images"`
 	Links       []Link   `json:"links"`
 	Credits     []Credit `json:"credits"`
-	// SiloPersonID is the person's id in Silo, when the library has them.
-	SiloPersonID string `json:"silo_person_id,omitempty"`
+	// CanRequest offers a Request button on titles not in the library.
+	CanRequest bool `json:"can_request"`
 	// LibraryError explains why library titles couldn't be marked.
 	LibraryError string `json:"library_error,omitempty"`
 }
