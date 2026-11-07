@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email alerts</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --text: #16181d; --muted: #5d6470;
+  --line: #e1e4e9; --accent: #6b4dff; --ok: #1f8a4c; --warn: #b26a00; --bad: #c53030;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --text: #f2f3f5; --muted: #9aa0ab; --line: #2a2f39; --accent: #8a72ff;
+    --ok: #4ccb84; --warn: #f0a938; --bad: #ff6b6b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --text: #f2f3f5; --muted: #9aa0ab; --line: #2a2f39; --accent: #8a72ff;
+  --ok: #4ccb84; --warn: #f0a938; --bad: #ff6b6b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 640px; margin: 0 auto; padding: 28px 16px 60px; }
+h1 { font-size: 24px; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 22px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+label.f { display: block; margin-bottom: 14px; }
+label.f > span, .legend { display: block; font-weight: 600; margin-bottom: 6px; }
+input[type=text], input[type=email], select { width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; font: inherit; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; cursor: pointer; }
+.choice:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.choice input { margin-top: 4px; }
+.choice small { display: block; color: var(--muted); }
+.check { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.libs { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 14px; }
+.hint { color: var(--muted); font-size: 13px; }
+button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+button.danger { color: var(--bad); }
+button:disabled { opacity: .55; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.spacer { flex: 1; }
+.status { border-radius: 10px; padding: 11px 14px; margin-bottom: 16px; border: 1px solid var(--line); background: var(--panel-2); }
+.status.ok { border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.status.warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.status.bad { border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: min(440px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Email alerts</h1>
+  <p class="sub" id="intro">Get an email when new episodes and movies arrive.</p>
+  <div id="status" class="status" hidden></div>
+
+  <form id="form" class="panel" hidden>
+    <label class="f"><span>Your name</span><input type="text" name="name" autocomplete="name"></label>
+    <label class="f"><span>Email address</span><input type="email" name="email" required autocomplete="email"></label>
+
+    <div class="legend">How often</div>
+    <label class="choice"><input type="radio" name="mode" value="instant" checked><div>As soon as something is added<small>One email a few minutes after each batch of new media.</small></div></label>
+    <label class="choice"><input type="radio" name="mode" value="instant_daily"><div>As soon as something is added, plus a daily digest<small id="instant-daily-when"></small></div></label>
+    <label class="choice"><input type="radio" name="mode" value="daily"><div>Daily digest<small id="daily-when"></small></div></label>
+    <label class="choice"><input type="radio" name="mode" value="weekly"><div>Weekly digest<small id="weekly-when"></small></div></label>
+
+    <div class="legend" style="margin-top:14px">Count as new if added within</div>
+    <select name="max_age" aria-label="Count as new if added within"></select>
+    <div class="hint" style="margin-top:4px">Anything added longer ago than this is never emailed, even after a long gap.</div>
+
+    <div class="legend" style="margin-top:14px">What to include</div>
+    <label class="check"><input type="checkbox" name="t-episode" checked> TV episodes</label>
+    <label class="check"><input type="checkbox" name="t-movie" checked> Movies</label>
+
+    <div id="libs-wrap" hidden>
+      <div class="legend" style="margin-top:14px">Libraries</div>
+      <div class="hint" style="margin-bottom:6px">Leave all unticked to include every library.</div>
+      <div class="libs" id="libs"></div>
+    </div>
+
+    <label class="check" style="margin-top:14px"><input type="checkbox" name="enabled" checked> Send me alerts</label>
+
+    <div class="row" style="margin-top:18px">
+      <button type="button" class="danger" id="remove" hidden>Remove my sign-up</button>
+      <div class="spacer"></div>
+      <button type="submit" class="primary" id="save">Save</button>
+    </div>
+  </form>
+</main>
+
+<dialog id="cdlg">
+  <form method="dialog">
+    <h2 style="margin-top:0;font-size:18px">Remove your sign-up?</h2>
+    <p class="hint">You'll stop getting alerts and your address is deleted from this server's list.</p>
+    <div class="row"><div class="spacer"></div><button value="no">Cancel</button><button class="primary" value="yes">Remove</button></div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  const qs = new URLSearchParams(location.search);
+  const theme = qs.get("theme");
+  if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
+
+  const API = "../api/me/";
+  const $ = (s) => document.querySelector(s);
+  const f = $("#form");
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const hh = (h) => String(h).padStart(2, "0") + ":00";
+  let view = null;
+
+  async function api(path, method = "GET", body) {
+    const init = { method, credentials: "same-origin" };
+    if (body !== undefined) { init.headers = { "Content-Type": "application/json" }; init.body = JSON.stringify(body); }
+    const res = await fetch(API + path, init);
+    let data = null;
+    try { data = await res.json(); } catch { /* not JSON */ }
+    if (!res.ok) throw new Error((data && data.error) || `${res.status} ${res.statusText}`);
+    return data;
+  }
+
+  function status(text, kind = "") {
+    const s = $("#status");
+    s.hidden = !text;
+    s.className = "status " + kind;
+    s.textContent = text || "";
+  }
+
+  function render(v, message) {
+    view = v;
+    if (!v.enabled) {
+      f.hidden = true;
+      status("Self-service sign-up is turned off on this server. Ask an admin to add you.", "warn");
+      return;
+    }
+    f.hidden = false;
+    if (v.server_name) $("#intro").textContent = `Get an email when new episodes and movies arrive on ${v.server_name}.`;
+    $("#daily-when").textContent = `Every day at ${hh(v.schedule.daily_hour)} (${v.schedule.timezone}).`;
+    $("#instant-daily-when").textContent = `Instant alerts, and a recap of the whole day at ${hh(v.schedule.daily_hour)} (${v.schedule.timezone}).`;
+    $("#weekly-when").textContent = `Every ${days[v.schedule.weekly_day]} at ${hh(v.schedule.weekly_hour)} (${v.schedule.timezone}).`;
+    const sub = v.subscription;
+    f.name.value = sub?.name || v.user_name || "";
+    f.email.value = sub?.pending_email || sub?.email || "";
+    f.querySelector(`input[name=mode][value="${sub?.mode || "instant"}"]`).checked = true;
+    f.max_age.innerHTML = (v.max_age_options || []).map((o) => `<option value="${o.hours}">${o.label.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</option>`).join("");
+    f.max_age.value = String(sub?.max_age_hours || 0);
+    const types = sub?.types?.length ? sub.types : ["episode", "movie"];
+    f["t-episode"].checked = types.includes("episode");
+    f["t-movie"].checked = types.includes("movie");
+    f.enabled.checked = sub ? sub.enabled : true;
+    const chosen = new Set(sub?.libraries || []);
+    $("#libs-wrap").hidden = !(v.libraries || []).length;
+    $("#libs").innerHTML = (v.libraries || []).map((l) => {
+      const id = String(l.id).replace(/"/g, "&quot;");
+      const name = String(l.name).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+      return `<label class="check"><input type="checkbox" value="${id}" ${chosen.has(l.id) ? "checked" : ""}> ${name}</label>`;
+    }).join("");
+    $("#remove").hidden = !sub;
+
+    if (message) {
+      status(message, message.startsWith("Saved, but") ? "bad" : "ok");
+    } else if (!sub) {
+      status("");
+    } else if (sub.pending_email) {
+      status(`Waiting for you to confirm ${sub.pending_email}. Check your inbox for the link.`, "warn");
+      addResend();
+    } else if (!sub.enabled) {
+      status("Alerts are turned off.", "warn");
+    } else {
+      status(`Alerts are going to ${sub.email}.`, "ok");
+    }
+  }
+
+  function addResend() {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = "Send the link again";
+    b.style.marginLeft = "10px";
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try { const r = await api("subscription/resend", "POST"); status(r.message, "ok"); }
+      catch (e) { status(e.message, "bad"); b.disabled = false; }
+    });
+    $("#status").appendChild(b);
+  }
+
+  f.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const types = [];
+    if (f["t-episode"].checked) types.push("episode");
+    if (f["t-movie"].checked) types.push("movie");
+    if (!types.length) return status("Pick at least one of TV episodes or Movies.", "bad");
+    $("#save").disabled = true;
+    try {
+      const v = await api("subscription", "PUT", {
+        name: f.name.value.trim(), email: f.email.value.trim(), mode: f.querySelector("input[name=mode]:checked").value,
+        types: types.length === 2 ? [] : types, enabled: f.enabled.checked, max_age_hours: Number(f.max_age.value),
+        libraries: [...document.querySelectorAll("#libs input:checked")].map((i) => i.value),
+      });
+      render(v, v.message);
+    } catch (err) { status(err.message, "bad"); }
+    $("#save").disabled = false;
+  });
+
+  $("#remove").addEventListener("click", () => {
+    const d = $("#cdlg");
+    d.returnValue = "";
+    d.showModal();
+    d.addEventListener("close", async () => {
+      if (d.returnValue !== "yes") return;
+      try { render(await api("subscription", "DELETE"), "Your sign-up has been removed."); }
+      catch (err) { status(err.message, "bad"); }
+    }, { once: true });
+  });
+
+  api("subscription").then((v) => render(v)).catch((e) => status("Couldn't load your settings: " + e.message, "bad"));
+})();
+</script>
+</body>
+</html>

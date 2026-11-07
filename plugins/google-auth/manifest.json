@@ -1,0 +1,162 @@
+{
+  "plugin_id": "community.google-auth",
+  "version": "0.3.2",
+  "checksum": "__CHECKSUM__",
+  "silo_api_version": "v1",
+  "supported_platforms": [
+    {
+      "os": "linux",
+      "arch": "amd64"
+    },
+    {
+      "os": "linux",
+      "arch": "arm64"
+    }
+  ],
+  "category": "Authentication",
+  "capabilities": [
+    {
+      "type": "auth_provider.v1",
+      "id": "google",
+      "display_name": "Google",
+      "auth_modes": [
+        "oauth2"
+      ],
+      "metadata": {
+        "connection_test": true
+      }
+    },
+    {
+      "type": "http_routes.v1",
+      "id": "assets",
+      "display_name": "Login button icon",
+      "description": "Serves the Google icon for the sign-in button."
+    }
+  ],
+  "http_routes": [
+    {
+      "id": "assets",
+      "method": "GET",
+      "path": "/assets/*",
+      "access": "public"
+    }
+  ],
+  "global_config_schema": [
+    {
+      "key": "google",
+      "title": "Google OAuth client",
+      "description": "Credentials from Google Cloud Console (APIs & Services > Credentials > OAuth client ID, type Web application). Anyone with an enabled Silo account may sign in with the Google address on their account; roles stay as set in Silo. Silo itself still links the Google identity to the account, automatically if Silo's email auto-match setting is on.",
+      "required": true,
+      "json_schema": "{\"type\":\"object\",\"properties\":{\"client_id\":{\"type\":\"string\"},\"client_secret\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"silo_api_key\":{\"type\":\"string\"}},\"additionalProperties\":false}",
+      "admin_form": {
+        "fields": [
+          {
+            "key": "client_id",
+            "label": "Client ID",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "required": true,
+            "placeholder": "123-abc.apps.googleusercontent.com"
+          },
+          {
+            "key": "client_secret",
+            "label": "Client secret",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "secret": true,
+            "required": false,
+            "description": "Required for sign-in to work. Leave blank to keep the secret already saved; type a value only to replace it."
+          },
+          {
+            "key": "silo_api_key",
+            "label": "Silo API key",
+            "description": "How the plugin checks that a Google address belongs to an enabled Silo account. Create a key in Settings > API keys with the admin:monitor:read scope. Leave blank to keep the saved key.",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "secret": true
+          },
+          {
+            "key": "prompt",
+            "label": "Default prompt",
+            "description": "Optional: select_account always shows the account chooser.",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "select_account"
+          }
+        ],
+        "sections": [
+          {
+            "key": "main",
+            "title": "Google OAuth client",
+            "field_keys": [
+              "client_id",
+              "client_secret",
+              "silo_api_key",
+              "prompt"
+            ]
+          }
+        ],
+        "submit_label": "Save Google settings"
+      }
+    },
+    {
+      "key": "display_name",
+      "title": "Button label",
+      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}},\"additionalProperties\":false}",
+      "admin_form": {
+        "fields": [
+          {
+            "key": "value",
+            "label": "Label",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "Google"
+          }
+        ],
+        "sections": [
+          {
+            "key": "main",
+            "title": "Button label",
+            "field_keys": [
+              "value"
+            ]
+          }
+        ],
+        "submit_label": "Save"
+      }
+    },
+    {
+      "key": "icon_url_path",
+      "title": "Button icon",
+      "json_schema": "{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"string\"}},\"additionalProperties\":false}",
+      "admin_form": {
+        "fields": [
+          {
+            "key": "value",
+            "label": "Icon path",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "google.svg"
+          }
+        ],
+        "sections": [
+          {
+            "key": "main",
+            "title": "Button icon",
+            "field_keys": [
+              "value"
+            ]
+          }
+        ],
+        "submit_label": "Save"
+      }
+    }
+  ],
+  "presentation": {
+    "display_name": "Google Sign-In",
+    "summary": "Sign in to Silo with a Google account.",
+    "description_markdown": "Adds a **Sign in with Google** button. Anyone with an enabled Silo account can sign in with the Google address on their account; roles come from Silo.",
+    "setup_markdown": "1. In Google Cloud Console create an OAuth client (Web application) and add the redirect URI shown by Silo.\n2. Create a Silo API key with the `admin:monitor:read` scope.\n3. Paste the client ID, client secret and Silo API key, then press Test connection.\n4. Optionally turn on Silo's email auto-match setting so first sign-ins link automatically.",
+    "publisher_name": "locky.uk",
+    "license_spdx": "MIT",
+    "homepage_url": "https://github.com/lockyuk/silo-plugins/tree/main/plugins/google-auth",
+    "source_url": "https://github.com/lockyuk/silo-plugins",
+    "support_url": "https://github.com/lockyuk/silo-plugins/issues",
+    "changelog_url": "https://github.com/lockyuk/silo-plugins/releases",
+    "publisher_url": "https://github.com/lockyuk"
+  }
+}

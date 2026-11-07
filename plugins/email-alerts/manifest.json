@@ -1,0 +1,245 @@
+{
+  "plugin_id": "community.email-alerts",
+  "version": "1.8.1",
+  "checksum": "__CHECKSUM__",
+  "silo_api_version": "v1",
+  "supported_platforms": [
+    {
+      "os": "linux",
+      "arch": "amd64"
+    },
+    {
+      "os": "linux",
+      "arch": "arm64"
+    }
+  ],
+  "category": "Notifications",
+  "capabilities": [
+    {
+      "type": "event_consumer.v1",
+      "id": "new-media",
+      "display_name": "New media listener",
+      "description": "Wakes the mailer when a scan adds items to a library.",
+      "subscriptions": [
+        "library.item_added",
+        "catalog.library.changed",
+        "scan_complete"
+      ]
+    },
+    {
+      "type": "scheduled_task.v1",
+      "id": "send-due",
+      "display_name": "Email alerts: send due emails",
+      "description": "Checks for new media and sends any instant alerts and digests that are due. Runs at startup; give it a 15-minute interval as a safety net."
+    },
+    {
+      "type": "http_routes.v1",
+      "id": "pages",
+      "display_name": "Email alert pages",
+      "description": "Template editor, recipient management and self-service sign-up."
+    }
+  ],
+  "http_routes": [
+    {
+      "id": "admin-page",
+      "method": "GET",
+      "path": "/admin/",
+      "access": "admin",
+      "navigable": true,
+      "navigation_label": "Email alerts",
+      "navigation_kind": "admin"
+    },
+    {
+      "id": "admin-api",
+      "method": "*",
+      "path": "/api/admin/*",
+      "access": "admin"
+    },
+    {
+      "id": "me-page",
+      "method": "GET",
+      "path": "/me/",
+      "access": "authenticated",
+      "navigable": true,
+      "navigation_label": "Email alerts",
+      "navigation_kind": "user"
+    },
+    {
+      "id": "me-api",
+      "method": "*",
+      "path": "/api/me/*",
+      "access": "authenticated"
+    },
+    {
+      "id": "public",
+      "method": "*",
+      "path": "/public/*",
+      "access": "public"
+    }
+  ],
+  "global_config_schema": [
+    {
+      "key": "silo",
+      "title": "Silo connection",
+      "description": "An API key from an admin account, used to read new episodes and movies from the catalog.",
+      "required": true,
+      "json_schema": "{\"type\":\"object\",\"properties\":{\"api_key\":{\"type\":\"string\"},\"profile_id\":{\"type\":\"string\"},\"base_url\":{\"type\":\"string\"},\"public_url\":{\"type\":\"string\"},\"server_name\":{\"type\":\"string\"}},\"additionalProperties\":false}",
+      "admin_form": {
+        "fields": [
+          {
+            "key": "api_key",
+            "label": "Admin API key",
+            "description": "Create one under Settings \u2192 API keys while signed in as an admin. Starts with sa_.",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "secret": true,
+            "required": true
+          },
+          {
+            "key": "server_name",
+            "label": "Server name",
+            "description": "Shown in emails as {{server_name}}.",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "Silo"
+          },
+          {
+            "key": "public_url",
+            "label": "Public URL override",
+            "description": "Used for Watch now and unsubscribe links. Leave empty to use SILO_PUBLIC_URL.",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "https://silo.example.com"
+          },
+          {
+            "key": "profile_id",
+            "label": "Profile ID",
+            "description": "The profile the plugin reads the catalog as. Leave empty to use the key owner's primary profile. Use an unrestricted profile so nothing is hidden.",
+            "control": "ADMIN_FORM_CONTROL_TEXT"
+          },
+          {
+            "key": "base_url",
+            "label": "Internal API URL override",
+            "description": "Leave empty; the plugin asks Silo for its own listener.",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "http://127.0.0.1:8080"
+          }
+        ],
+        "sections": [
+          {
+            "key": "main",
+            "title": "Connection",
+            "field_keys": [
+              "api_key",
+              "server_name",
+              "public_url"
+            ]
+          },
+          {
+            "key": "advanced",
+            "title": "Advanced",
+            "collapsible": true,
+            "collapsed_default": true,
+            "field_keys": [
+              "profile_id",
+              "base_url"
+            ]
+          }
+        ],
+        "submit_label": "Save connection"
+      }
+    },
+    {
+      "key": "smtp",
+      "title": "Outgoing mail (SMTP)",
+      "description": "The mail server the alerts are sent through. You can reuse the details from Admin Settings \u2192 Notifications \u2192 Email.",
+      "required": true,
+      "json_schema": "{\"type\":\"object\",\"properties\":{\"host\":{\"type\":\"string\"},\"port\":{\"type\":\"number\"},\"security\":{\"type\":\"string\",\"enum\":[\"starttls\",\"tls\",\"none\"]},\"username\":{\"type\":\"string\"},\"password\":{\"type\":\"string\"},\"from_address\":{\"type\":\"string\"},\"from_name\":{\"type\":\"string\"},\"reply_to\":{\"type\":\"string\"}},\"additionalProperties\":false}",
+      "admin_form": {
+        "fields": [
+          {
+            "key": "host",
+            "label": "SMTP host",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "smtp.gmail.com",
+            "required": true
+          },
+          {
+            "key": "port",
+            "label": "Port",
+            "control": "ADMIN_FORM_CONTROL_NUMBER",
+            "default_value": 587,
+            "validation": {
+              "has_min": true,
+              "min": 1,
+              "has_max": true,
+              "max": 65535
+            }
+          },
+          {
+            "key": "security",
+            "label": "Security",
+            "control": "ADMIN_FORM_CONTROL_SELECT",
+            "default_value": "starttls",
+            "options": [
+              {
+                "value": "starttls",
+                "label": "STARTTLS (port 587)"
+              },
+              {
+                "value": "tls",
+                "label": "TLS (port 465)"
+              },
+              {
+                "value": "none",
+                "label": "None"
+              }
+            ]
+          },
+          {
+            "key": "username",
+            "label": "Username",
+            "description": "Leave empty for no authentication.",
+            "control": "ADMIN_FORM_CONTROL_TEXT"
+          },
+          {
+            "key": "password",
+            "label": "Password",
+            "description": "For Gmail, use an app password.",
+            "control": "ADMIN_FORM_CONTROL_PASSWORD",
+            "secret": true
+          },
+          {
+            "key": "from_address",
+            "label": "From address",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "silo@example.com",
+            "required": true
+          },
+          {
+            "key": "from_name",
+            "label": "From name",
+            "control": "ADMIN_FORM_CONTROL_TEXT",
+            "placeholder": "Silo"
+          },
+          {
+            "key": "reply_to",
+            "label": "Reply-to address",
+            "control": "ADMIN_FORM_CONTROL_TEXT"
+          }
+        ],
+        "submit_label": "Save mail server"
+      }
+    }
+  ],
+  "presentation": {
+    "display_name": "Email Alerts",
+    "summary": "Email plugin for Silo that sends customisable rich emails for every new episode and movie on the server.",
+    "description_markdown": "Sends an email when new episodes or movies arrive anywhere on the server, not just for series a profile follows.\n\n- Instant alerts, daily digests or weekly digests per recipient\n- Fully editable subject, HTML and plain-text templates with variables such as `{{show_name}}`, `{{episode_name}}` and `{{show_synopsis}}`\n- Posters and episode stills embedded in the email\n- Admin-managed recipients plus a self-service sign-up page for every user, with one-click unsubscribe",
+    "setup_markdown": "1. Create an admin API key (Settings \u2192 API keys) and paste it into **Silo connection**.\n2. Fill in **Outgoing mail (SMTP)**.\n3. Open **Email alerts** in the admin menu to edit templates, add recipients and send a test.\n4. In Scheduled Tasks, give **Email alerts: send due emails** a 15-minute interval so digests go out even when no scan runs.",
+    "publisher_name": "locky.uk",
+    "license_spdx": "MIT",
+    "homepage_url": "https://github.com/lockyuk/silo-plugins/tree/main/plugins/email-alerts",
+    "source_url": "https://github.com/lockyuk/silo-plugins",
+    "support_url": "https://github.com/lockyuk/silo-plugins/issues",
+    "changelog_url": "https://github.com/lockyuk/silo-plugins/releases",
+    "publisher_url": "https://github.com/lockyuk"
+  }
+}
